@@ -1,3 +1,4 @@
+import 'package:edi301/src/pages/Admin/family_detail/Family_detail_page.dart';
 import 'package:flutter/material.dart';
 import 'package:edi301/Login/login_page.dart';
 import 'package:edi301/Register/register_page.dart';
@@ -42,6 +43,7 @@ class MyApp extends StatelessWidget {
         'add_family': (context) => const AddFamilyPage(),
         'add_alumns': (context) => const AddAlumnsPage(),
         'get_family': (context) => const GetFamiliyPage(),
+        'family_detail': (_) => const FamilyDetailPage(),
       },
     );
   }

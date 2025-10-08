@@ -1,4 +1,6 @@
 import 'package:edi301/src/pages/Admin/add_alumns/add_alumns_controller.dart';
+import 'package:edi301/src/pages/Admin/add_family/add_family_controller.dart';
+import 'package:edi301/src/pages/Admin/get_family/family_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -11,6 +13,15 @@ class AddAlumnsPage extends StatefulWidget {
 
 class _AddAlumnsPageState extends State<AddAlumnsPage> {
   final AddAlumnsController _controller = AddAlumnsController();
+
+  // Buscador/selección de familia
+  final TextEditingController searchFamilyCtrl = TextEditingController();
+  String? selectedFamily;
+
+  // Matrículas dinámicas
+  final List<TextEditingController> studentCtrls = [];
+  final List<Widget> alumnFields = [];
+
   @override
   void initState() {
     super.initState();
@@ -19,9 +30,14 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
     });
   }
 
-  String? selectedFamily; // Familia seleccionada
-  List<Widget> alumnFields = []; // Campos dinámicos para los alumnos
-  List<int> fieldKeys = []; // Claves únicas para los campos
+  @override
+  void dispose() {
+    searchFamilyCtrl.dispose();
+    for (final c in studentCtrls) c.dispose();
+    super.dispose();
+  }
+
+  List<Family> get allFamilies => AddFamilyController.familyList;
 
   @override
   Widget build(BuildContext context) {
@@ -33,8 +49,7 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _textFieldSearchFamily(),
-            const FilterOptions(options: ['Todos', 'Interno', 'Externo']),
+            _familyAutocomplete(),
             const Padding(
               padding: EdgeInsets.all(20),
               child: Text(
@@ -42,7 +57,7 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
-            ...alumnFields, // Mostrar los campos generados dinámicamente
+            ...alumnFields,
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: IconButton(
@@ -51,13 +66,7 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
                   size: 40,
                   color: Colors.amber,
                 ),
-                onPressed: () {
-                  setState(() {
-                    final key = fieldKeys.length; // Generar clave única
-                    fieldKeys.add(key);
-                    alumnFields.add(_buildAlumnField(key));
-                  });
-                },
+                onPressed: _addStudentField,
               ),
             ),
             _buttonSave(),
@@ -67,52 +76,121 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
     );
   }
 
-  Widget _textFieldSearchFamily() {
+  // ================== UI ==================
+
+  Widget _familyAutocomplete() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 25),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Buscar familia',
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: const BorderSide(color: Color.fromRGBO(245, 188, 6, 1)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: const BorderSide(color: Color.fromRGBO(245, 188, 6, 1)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: const BorderSide(
-              color: Color.fromRGBO(245, 188, 6, 1),
-              width: 2,
+      child: Autocomplete<Family>(
+        optionsBuilder: (TextEditingValue text) {
+          final q = text.text.trim().toLowerCase();
+          if (q.isEmpty) return const Iterable<Family>.empty();
+          return allFamilies.where(
+            (f) => f.familyName.toLowerCase().contains(q),
+          );
+        },
+        displayStringForOption: (Family f) => f.familyName,
+        onSelected: (Family f) {
+          setState(() {
+            selectedFamily = f.familyName;
+            searchFamilyCtrl.text = f.familyName;
+          });
+        },
+        fieldViewBuilder:
+            (context, textController, focusNode, onFieldSubmitted) {
+              // sincroniza con nuestro controller
+              textController.text = searchFamilyCtrl.text;
+              textController.addListener(() {
+                searchFamilyCtrl.text = textController.text;
+              });
+              return TextField(
+                controller: textController,
+                focusNode: focusNode,
+                decoration: InputDecoration(
+                  hintText: 'Buscar familia',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: const BorderSide(
+                      color: Color.fromRGBO(245, 188, 6, 1),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: const BorderSide(
+                      color: Color.fromRGBO(245, 188, 6, 1),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    borderSide: const BorderSide(
+                      color: Color.fromRGBO(245, 188, 6, 1),
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.all(15),
+                  suffixIcon: const Icon(
+                    Icons.search,
+                    color: Color.fromRGBO(19, 67, 107, 1),
+                  ),
+                ),
+              );
+            },
+        optionsViewBuilder: (context, onSelected, options) {
+          final opts = options.toList();
+          return Align(
+            alignment: Alignment.topLeft,
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(12),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxHeight: 240,
+                  maxWidth: 600,
+                ),
+                child: ListView.separated(
+                  padding: EdgeInsets.zero,
+                  itemCount: opts.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final f = opts[index];
+                    return ListTile(
+                      title: Text(f.familyName),
+                      subtitle: Text(
+                        'Padre: ${f.fatherName} • Madre: ${f.motherName}',
+                      ),
+                      onTap: () => onSelected(f),
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-          contentPadding: const EdgeInsets.all(15),
-          suffixIcon: const Icon(
-            Icons.search,
-            color: Color.fromRGBO(19, 67, 107, 1),
-          ),
-        ),
-        onChanged: (value) {
-          // Implementa la búsqueda de familias aquí
-          print('Buscando familia: $value');
+          );
         },
       ),
     );
   }
 
-  Widget _buildAlumnField(int key) {
+  void _addStudentField() {
+    setState(() {
+      final ctrl = TextEditingController();
+      studentCtrls.add(ctrl);
+      final index = studentCtrls.length - 1;
+      alumnFields.add(_buildAlumnField(index, ctrl));
+    });
+  }
+
+  Widget _buildAlumnField(int index, TextEditingController ctrl) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
       child: Row(
         children: [
           Expanded(
             child: TextField(
+              controller: ctrl,
               decoration: InputDecoration(
-                hintText: 'Matrícula del alumno ${key + 1}',
+                hintText: 'Matrícula del alumno ${index + 1}',
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -121,11 +199,10 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
             icon: const Icon(Icons.delete, color: Colors.red),
             onPressed: () {
               setState(() {
-                // Eliminar campo y clave asociada
-                int index = fieldKeys.indexOf(key);
-                if (index != -1) {
-                  alumnFields.removeAt(index);
-                  fieldKeys.removeAt(index);
+                final i = studentCtrls.indexOf(ctrl);
+                if (i != -1) {
+                  studentCtrls.removeAt(i);
+                  alumnFields.removeAt(i);
                 }
               });
             },
@@ -140,7 +217,7 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: ElevatedButton(
-        onPressed: _controller.goToAdminPage,
+        onPressed: _onSave,
         style: ElevatedButton.styleFrom(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30),
@@ -155,46 +232,54 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
       ),
     );
   }
-}
 
-class FilterOptions extends StatefulWidget {
-  final List<String> options;
+  // ================== LÓGICA ==================
 
-  const FilterOptions({super.key, required this.options});
+  void _onSave() {
+    final famName = (selectedFamily ?? searchFamilyCtrl.text).trim();
+    if (famName.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Selecciona una familia')));
+      return;
+    }
 
-  @override
-  _FilterOptionsState createState() => _FilterOptionsState();
-}
+    final students = studentCtrls
+        .map((c) => c.text.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
 
-class _FilterOptionsState extends State<FilterOptions> {
-  String? selectedOption;
+    if (students.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Agrega al menos una matrícula')),
+      );
+      return;
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10, // Espacio horizontal entre los filtros
-      children: widget.options.map((option) {
-        return ChoiceChip(
-          label: Text(option),
-          labelStyle: TextStyle(
-            color: selectedOption == option
-                ? Colors.white
-                : const Color.fromRGBO(19, 67, 107, 1),
-          ),
-          backgroundColor: Colors.white,
-          selectedColor: const Color.fromRGBO(245, 188, 6, 1),
-          selected: selectedOption == option,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Color.fromRGBO(245, 188, 6, 1)),
-          ),
-          onSelected: (isSelected) {
-            setState(() {
-              selectedOption = isSelected ? option : null;
-            });
-          },
-        );
-      }).toList(),
-    );
+    final ok = AddFamilyController.addStudentsToFamily(famName, students);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se encontró la familia "$famName"')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Alumnos agregados a $famName')));
+
+    // Limpia y navega a la lista/búsqueda
+    _clearForm();
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(context, 'get_family');
+  }
+
+  void _clearForm() {
+    selectedFamily = null;
+    searchFamilyCtrl.clear();
+    for (final c in studentCtrls) c.dispose();
+    studentCtrls.clear();
+    alumnFields.clear();
+    setState(() {});
   }
 }

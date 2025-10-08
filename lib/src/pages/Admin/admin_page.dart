@@ -42,6 +42,7 @@ class _AdminPageState extends State<AdminPage> {
             child: CustomButton(
               label: 'Agregar Familia',
               onPressed: _controller.goToAddFamilyPage,
+              icon: Icons.add_home,
             ),
           ),
           const SizedBox(height: 15),
@@ -50,6 +51,7 @@ class _AdminPageState extends State<AdminPage> {
             child: CustomButton(
               label: 'Asignar Alumnos',
               onPressed: _alumnsController.goToAddAlumnsPage,
+              icon: Icons.person_add,
             ),
           ),
           const SizedBox(height: 15),
@@ -58,6 +60,7 @@ class _AdminPageState extends State<AdminPage> {
             child: CustomButton(
               label: 'Consultar Familias',
               onPressed: _getFamiliyController.goToGetFamilyPage,
+              icon: Icons.visibility,
             ),
           ),
           const SizedBox(height: 15),
@@ -70,8 +73,14 @@ class _AdminPageState extends State<AdminPage> {
 class CustomButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
+  final IconData? icon;
 
-  const CustomButton({super.key, required this.label, required this.onPressed});
+  const CustomButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +108,7 @@ class CustomButton extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10), // Espacio entre el texto y el icono
-          const Icon(Icons.add, color: Colors.white, size: 35),
+          Icon(icon, color: Colors.white, size: 30),
         ],
       ),
     );

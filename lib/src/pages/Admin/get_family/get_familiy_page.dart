@@ -97,12 +97,13 @@ class _GetFamiliyPageState extends State<GetFamiliyPage> {
 
   // 👇 Usa el alias fm.Family en las firmas
   Widget _buildFamilyCards(List<fm.Family> families) {
+    // dentro de _buildFamilyCards(...)
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: families.length,
-      itemBuilder: (_, i) {
-        final f = families[i];
+      itemBuilder: (context, index) {
+        final f = families[index];
         return Card(
           color: const Color.fromARGB(255, 255, 205, 40),
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -110,40 +111,49 @@ class _GetFamiliyPageState extends State<GetFamiliyPage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(15),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  f.familyName,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(15),
+            onTap: () {
+              Navigator.pushNamed(
+                context,
+                'family_detail', // 👈 nueva ruta
+                arguments: index, // pasamos el índice
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(15),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    f.familyName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  'Padre: ${f.fatherName}',
-                  style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  'Madre: ${f.motherName}',
-                  style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Residencia: ${f.residence}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: f.residence == 'Interna' ? Colors.green : Colors.red,
-                    fontWeight: FontWeight.bold,
+                  const SizedBox(height: 5),
+                  Text(
+                    'Padre: ${f.fatherName}',
+                    style: TextStyle(color: Colors.grey[700]),
                   ),
-                ),
-                if (f.children.isNotEmpty)
-                  Text('Hijos: ${f.children.join(', ')}'),
-              ],
+                  const SizedBox(height: 5),
+                  Text(
+                    'Madre: ${f.motherName}',
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Residencia: ${f.residence}',
+                    style: TextStyle(
+                      color: f.residence == 'Interna'
+                          ? Colors.green
+                          : Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

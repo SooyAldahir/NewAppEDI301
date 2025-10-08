@@ -255,7 +255,11 @@ class _AddFamilyPageState extends State<AddFamilyPage> {
             fatherName: fatherCtrl.text.trim(),
             motherName: motherCtrl.text.trim(),
             residence: light1 ? "Interna" : "Externa",
-            children: childrenValues,
+            householdChildren: childCtrls
+                .map((c) => c.text.trim())
+                .where((t) => t.isNotEmpty)
+                .toList(), // 👈 antes usabas `children:`
+            // assignedStudents: [] // opcional; queda vacío por default
           );
 
           // Guarda en tu lista/controlador

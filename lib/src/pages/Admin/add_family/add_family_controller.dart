@@ -16,6 +16,15 @@ class AddFamilyController {
     );
   }
 
+  static bool addStudentsToFamily(String familyName, List<String> students) {
+    final idx = familyList.indexWhere(
+      (f) => f.familyName.toLowerCase() == familyName.toLowerCase(),
+    );
+    if (idx == -1) return false;
+    familyList[idx].assignedStudents.addAll(students);
+    return true;
+  }
+
   void goToAddFamilyPage() {
     Navigator.pushNamed(context, 'add_family');
   }
