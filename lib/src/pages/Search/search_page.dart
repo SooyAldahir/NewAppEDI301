@@ -1,70 +1,283 @@
 import 'package:flutter/material.dart';
+import 'package:edi301/services/search_api.dart';
+import 'package:edi301/src/pages/Admin/add_family/add_family_controller.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
-
   @override
   State<SearchPage> createState() => _SearchPageState();
 }
 
 class _SearchPageState extends State<SearchPage> {
+  final TextEditingController _qCtrl = TextEditingController();
+  final ValueNotifier<bool> _loading = ValueNotifier(false);
+  final ValueNotifier<List<UserMini>> _alumnos = ValueNotifier([]);
+  final ValueNotifier<List<UserMini>> _empleados = ValueNotifier([]);
+  final ValueNotifier<List<FamilyMini>> _familias = ValueNotifier([]);
+  bool _searched = false;
+
+  final _api = SearchApi();
+
+  @override
+  void dispose() {
+    _qCtrl.dispose();
+    _loading.dispose();
+    _alumnos.dispose();
+    _empleados.dispose();
+    _familias.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runSearch([String? raw]) async {
+    final q = (raw ?? _qCtrl.text).trim();
+    if (q.isEmpty) {
+      _alumnos.value = [];
+      _empleados.value = [];
+      _familias.value = [];
+      setState(() => _searched = false);
+      return;
+    }
+    _loading.value = true;
+    try {
+      final r = await _api.searchAll(q);
+      _alumnos.value = r.alumnos;
+      _empleados.value = r.empleados;
+      _familias.value = r.familias;
+    } catch (_) {
+      _alumnos.value = [];
+      _empleados.value = [];
+      _familias.value = [];
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo completar la búsqueda')),
+      );
+    } finally {
+      _loading.value = false;
+      setState(() => _searched = true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
-        elevation: 0,
+        backgroundColor: const Color.fromRGBO(19, 67, 107, 1),
+        title: const Text('Búsqueda general'),
       ),
-      body: SingleChildScrollView(
-        child: Column(children: [_textFieldSearch()]),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+        child: Column(
+          children: [
+            _searchField(),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _loading,
+                builder: (_, loading, __) {
+                  if (loading)
+                    return const Center(child: CircularProgressIndicator());
+                  return _bodyResults();
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _textFieldSearch() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 25),
-      child: TextFormField(
-        keyboardType: TextInputType.phone,
-        decoration: InputDecoration(
-          hintText: 'Ingrese una matricula o # de empleado',
-          filled: true,
-          fillColor: Colors.white, // Fondo blanco
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: const BorderSide(
-              color: Color.fromRGBO(245, 188, 6, 1), // Borde amarillo
+  Widget _bodyResults() {
+    if (!_searched) {
+      return const Center(
+        child: Text('Ingresa una matrícula, # de empleado o nombre de familia'),
+      );
+    }
+    return ListView(
+      children: [
+        ValueListenableBuilder<List<UserMini>>(
+          valueListenable: _alumnos,
+          builder: (_, list, __) => _section(
+            title: 'Alumnos (${list.length})',
+            emptyText: 'Sin alumnos',
+            children: list.map(_userTile).toList(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        ValueListenableBuilder<List<UserMini>>(
+          valueListenable: _empleados,
+          builder: (_, list, __) => _section(
+            title: 'Empleados (${list.length})',
+            emptyText: 'Sin empleados',
+            children: list.map(_userTile).toList(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        ValueListenableBuilder<List<FamilyMini>>(
+          valueListenable: _familias,
+          builder: (_, list, __) => _section(
+            title: 'Familias (${list.length})',
+            emptyText: 'Sin familias',
+            children: list.map(_familyTile).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _section({
+    required String title,
+    required String emptyText,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            if (children.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  emptyText,
+                  style: const TextStyle(color: Colors.black54),
+                ),
+              )
+            else
+              ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _userTile(UserMini u) {
+    final tipo = (u.tipo).toUpperCase();
+    final fullName = '${u.nombre} ${u.apellido}'.trim();
+
+    // 👇 prioriza numEmpleado para EMPLEADO; si no hay, cae a matrícula
+    final doc = (tipo == 'EMPLEADO' && u.numEmpleado != null)
+        ? 'No. empleado: ${u.numEmpleado}'
+        : (u.matricula != null ? 'Matrícula: ${u.matricula}' : '');
+
+    return ListTile(
+      leading: const CircleAvatar(child: Icon(Icons.person)),
+      title: Text(fullName.isEmpty ? '—' : fullName),
+      subtitle: Text([tipo, doc].where((e) => e.isNotEmpty).join(' · ')),
+      trailing: IconButton(
+        tooltip: 'Ver detalle',
+        icon: const Icon(Icons.remove_red_eye_outlined),
+        onPressed: () {
+          final args = <String, dynamic>{
+            'name': fullName,
+            'email': u.email ?? '—',
+            'status': 'Activo',
+            'grade': tipo == 'ALUMNO' ? '—' : 'Empleado',
+
+            // 👇 Etiqueta y valor del documento según el tipo
+            'docLabel': (tipo == 'EMPLEADO') ? 'No. empleado' : 'Matrícula',
+            'docValue': (tipo == 'EMPLEADO')
+                ? (u.numEmpleado?.toString() ?? '—')
+                : (u.matricula?.toString() ?? '—'),
+
+            // (opcional) por compat: si tu detalle aún lee 'matricula'
+            'matricula': u.matricula?.toString() ?? '—',
+            'numEmpleado': u.numEmpleado?.toString(),
+          };
+          Navigator.pushNamed(context, 'student_detail', arguments: args);
+        },
+      ),
+    );
+  }
+
+  Widget _familyTile(FamilyMini f) {
+    final res = (f.residencia ?? 'Desconocida');
+    final color = res.toLowerCase().startsWith('intern')
+        ? Colors.green
+        : Colors.red;
+
+    void openFamily() {
+      // FamilyDetailPage espera un índice de AddFamilyController.familyList
+      final list = AddFamilyController.familyList.value;
+      final idx = list.indexWhere(
+        (x) =>
+            x.familyName.toLowerCase().trim() ==
+            (f.nombre.toLowerCase().trim()),
+      );
+      if (idx < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'La familia "${f.nombre}" no está cargada en la lista local',
             ),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: const BorderSide(
-              color: Color.fromRGBO(
-                245,
-                188,
-                6,
-                1,
-              ), // Borde amarillo cuando no está enfocado
-            ),
+        );
+        return;
+      }
+      Navigator.pushNamed(context, 'family_detail', arguments: idx);
+    }
+
+    return ListTile(
+      leading: const CircleAvatar(child: Icon(Icons.home)),
+      title: Text(f.nombre.isEmpty ? '—' : f.nombre),
+      subtitle: Text('Residencia: $res'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Ver detalle',
+            icon: const Icon(Icons.remove_red_eye_outlined),
+            onPressed: openFamily,
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: const BorderSide(
-              color: Color.fromRGBO(
-                245,
-                188,
-                6,
-                1,
-              ), // Borde amarillo cuando está enfocado
-              width: 2, // Ancho del borde cuando está enfocado
-            ),
+          Icon(Icons.chevron_right, color: color),
+        ],
+      ),
+      onTap: openFamily,
+    );
+  }
+
+  Widget _searchField() {
+    return TextField(
+      controller: _qCtrl,
+      keyboardType: TextInputType.text,
+      textInputAction: TextInputAction.search,
+      onSubmitted: _runSearch,
+      onChanged: (v) {
+        if (v.trim().length >= 3) _runSearch(v); // búsqueda en vivo
+      },
+      decoration: InputDecoration(
+        hintText: 'Ingrese matrícula, # de empleado o nombre de familia',
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(30),
+          borderSide: const BorderSide(color: Color.fromRGBO(245, 188, 6, 1)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(30),
+          borderSide: const BorderSide(color: Color.fromRGBO(245, 188, 6, 1)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(30),
+          borderSide: const BorderSide(
+            color: Color.fromRGBO(245, 188, 6, 1),
+            width: 2,
           ),
-          contentPadding: const EdgeInsets.all(15),
-          suffixIcon: const Icon(
-            Icons.search,
-            color: Color.fromRGBO(19, 67, 107, 1),
-          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+        suffixIcon: IconButton(
+          icon: const Icon(Icons.search, color: Color.fromRGBO(19, 67, 107, 1)),
+          onPressed: _runSearch,
         ),
       ),
     );

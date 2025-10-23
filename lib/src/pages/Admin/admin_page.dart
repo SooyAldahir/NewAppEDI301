@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:edi301/src/pages/Admin/add_family/add_family_controller.dart';
-import 'package:edi301/src/pages/Admin/add_alumns/add_alumns_controller.dart';
-import 'package:edi301/src/pages/Admin/get_family/get_familiy_controller.dart';
 import 'package:flutter/scheduler.dart';
 
 class AdminPage extends StatefulWidget {
@@ -12,18 +9,10 @@ class AdminPage extends StatefulWidget {
 }
 
 class _AdminPageState extends State<AdminPage> {
-  final AddFamilyController _controller = AddFamilyController();
-  final AddAlumnsController _alumnsController = AddAlumnsController();
-  final GetFamiliyController _getFamiliyController = GetFamiliyController();
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
-      _controller.init(context);
-      _alumnsController.init(context);
-      _getFamiliyController.init(context);
-    });
   }
 
   @override
@@ -41,7 +30,7 @@ class _AdminPageState extends State<AdminPage> {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: CustomButton(
               label: 'Agregar Familia',
-              onPressed: _controller.goToAddFamilyPage,
+              onPressed: () => Navigator.pushNamed(context, 'add_family'),
               icon: Icons.add_home,
             ),
           ),
@@ -50,7 +39,7 @@ class _AdminPageState extends State<AdminPage> {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: CustomButton(
               label: 'Asignar Alumnos',
-              onPressed: _alumnsController.goToAddAlumnsPage,
+              onPressed: () => Navigator.pushNamed(context, 'add_alumns'),
               icon: Icons.person_add,
             ),
           ),
@@ -59,7 +48,7 @@ class _AdminPageState extends State<AdminPage> {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: CustomButton(
               label: 'Consultar Familias',
-              onPressed: _getFamiliyController.goToGetFamilyPage,
+              onPressed: () => Navigator.pushNamed(context, 'get_family'),
               icon: Icons.visibility,
             ),
           ),

@@ -1,6 +1,7 @@
 import 'package:edi301/src/pages/Admin/add_alumns/add_alumns_controller.dart';
 import 'package:edi301/src/pages/Admin/add_family/add_family_controller.dart';
-import 'package:edi301/src/pages/Admin/get_family/family_model.dart';
+import 'package:edi301/models/family_model.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -22,22 +23,35 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
   final List<TextEditingController> studentCtrls = [];
   final List<Widget> alumnFields = [];
 
+  bool _lockedFamily = false;
+
   @override
   void initState() {
     super.initState();
-    SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
       _controller.init(context);
+      // lee argumento pasada desde FamilyDetailPage
+      final args = ModalRoute.of(context)!.settings.arguments;
+      if (args is String && args.isNotEmpty) {
+        setState(() {
+          selectedFamily = args;
+          searchFamilyCtrl.text = args;
+          _lockedFamily = true; // bloquear edición
+        });
+      }
     });
   }
 
   @override
   void dispose() {
     searchFamilyCtrl.dispose();
-    for (final c in studentCtrls) c.dispose();
+    for (final c in studentCtrls) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  List<Family> get allFamilies => AddFamilyController.familyList;
+  List<Family> get allFamilies => AddFamilyController.familyList.value;
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +93,29 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
   // ================== UI ==================
 
   Widget _familyAutocomplete() {
+    if (_lockedFamily) {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 25),
+        child: TextField(
+          controller: searchFamilyCtrl,
+          readOnly: true,
+          decoration: InputDecoration(
+            labelText: 'Familia seleccionada',
+            suffixIcon: const Icon(Icons.lock),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(30),
+              borderSide: const BorderSide(
+                color: Color.fromRGBO(245, 188, 6, 1),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 👇 ESTE return faltaba
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 25),
       child: Autocomplete<Family>(
@@ -98,11 +135,19 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
         },
         fieldViewBuilder:
             (context, textController, focusNode, onFieldSubmitted) {
-              // sincroniza con nuestro controller
+              // Sincroniza con tu controller
               textController.text = searchFamilyCtrl.text;
               textController.addListener(() {
+                // si el usuario edita manualmente, actualiza el tuyo
                 searchFamilyCtrl.text = textController.text;
+                // opcional: si cambia el texto, des-selecciona la familia
+                if (selectedFamily != null &&
+                    selectedFamily!.toLowerCase() !=
+                        textController.text.toLowerCase()) {
+                  selectedFamily = null;
+                }
               });
+
               return TextField(
                 controller: textController,
                 focusNode: focusNode,
@@ -264,14 +309,19 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
       return;
     }
 
+    // al final de _onSave(), cuando ok == true
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Alumnos agregados a $famName')));
 
-    // Limpia y navega a la lista/búsqueda
-    _clearForm();
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(context, 'get_family');
+    // En lugar de ir a 'get_family' siempre, decide según origen:
+    if (_lockedFamily) {
+      // 👇 Volver a FamilyDetailPage y avisarle que hubo cambios
+      Navigator.pop(context, true);
+    } else {
+      // si abriste AddAlumnsPage “suelta”, te llevamos a la lista
+      Navigator.pushReplacementNamed(context, 'get_family');
+    }
   }
 
   void _clearForm() {

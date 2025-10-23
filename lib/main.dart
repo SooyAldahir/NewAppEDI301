@@ -1,4 +1,3 @@
-import 'package:edi301/src/pages/Admin/family_detail/Family_detail_page.dart';
 import 'package:flutter/material.dart';
 import 'package:edi301/Login/login_page.dart';
 import 'package:edi301/Register/register_page.dart';
@@ -11,7 +10,9 @@ import 'package:edi301/src/pages/Perfil/perfil_page.dart';
 import 'package:edi301/src/pages/Family/Edit/edit_page.dart';
 import 'package:edi301/src/pages/Admin/add_family/add_family_page.dart';
 import 'package:edi301/src/pages/Admin/add_alumns/add_alumns_page.dart';
-import 'package:edi301/src/pages/Admin/get_family/get_familiy_page.dart';
+import 'package:edi301/src/pages/Admin/get_family/get_family_page.dart';
+import 'package:edi301/src/pages/Admin/family_detail/Family_detail_page.dart';
+import 'package:edi301/src/pages/Admin/studient_detail/studient_detail_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -42,8 +43,9 @@ class MyApp extends StatelessWidget {
         'perfil': (context) => const PerfilPage(),
         'add_family': (context) => const AddFamilyPage(),
         'add_alumns': (context) => const AddAlumnsPage(),
-        'get_family': (context) => const GetFamiliyPage(),
+        'get_family': (context) => const GetFamilyPage(),
         'family_detail': (_) => const FamilyDetailPage(),
+        'student_detail': (_) => const StudentDetailPage(),
       },
     );
   }

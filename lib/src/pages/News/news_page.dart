@@ -15,7 +15,7 @@ class _NewsPageState extends State<NewsPage> {
         elevation: 0,
         backgroundColor: Colors.white,
         title: const Text(
-          'Bienvenid@',
+          'Bienvenido, Aldahir Ballina',
           style: TextStyle(
             color: Colors.black,
             fontWeight: FontWeight.bold,

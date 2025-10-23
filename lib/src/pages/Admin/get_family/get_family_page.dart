@@ -1,23 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:edi301/src/pages/Admin/get_family/get_family_controller.dart';
+import 'package:edi301/models/family_model.dart' as fm;
 
-// 👇 tu controlador (sin cambiar el nombre)
-import 'package:edi301/src/pages/Admin/get_family/get_familiy_controller.dart';
-
-// 👇 importa el modelo con ALIAS para evitar choques
-import 'package:edi301/src/pages/Admin/get_family/family_model.dart' as fm;
-
-class GetFamiliyPage extends StatefulWidget {
-  // 👈 se queda tal cual
-  const GetFamiliyPage({super.key});
+class GetFamilyPage extends StatefulWidget {
+  const GetFamilyPage({super.key});
 
   @override
-  State<GetFamiliyPage> createState() => _GetFamiliyPageState(); // 👈 usa GetFamiliyPage
+  State<GetFamilyPage> createState() => _GetFamiliyPageState(); // 👈 usa GetFamiliyPage
 }
 
-class _GetFamiliyPageState extends State<GetFamiliyPage> {
-  // 👈 usa GetFamiliyPage
-  final GetFamiliyController _controller = GetFamiliyController();
+class _GetFamiliyPageState extends State<GetFamilyPage> {
+  final GetFamilyController _controller = GetFamilyController();
 
   @override
   void initState() {
@@ -70,6 +64,8 @@ class _GetFamiliyPageState extends State<GetFamiliyPage> {
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 25),
       child: TextField(
         controller: _controller.searchCtrl,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (_) => _controller.searchNow(),
         decoration: InputDecoration(
           hintText: 'Buscar familia por nombre...',
           filled: true,
@@ -86,9 +82,12 @@ class _GetFamiliyPageState extends State<GetFamiliyPage> {
             ),
           ),
           contentPadding: const EdgeInsets.all(15),
-          suffixIcon: const Icon(
-            Icons.search,
-            color: Color.fromRGBO(19, 67, 107, 1),
+          suffixIcon: IconButton(
+            icon: const Icon(
+              Icons.search,
+              color: Color.fromRGBO(19, 67, 107, 1),
+            ),
+            onPressed: _controller.searchNow,
           ),
         ),
       ),
