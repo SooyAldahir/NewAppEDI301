@@ -1,4 +1,5 @@
 // lib/src/pages/Admin/add_family/add_family_controller.dart
+import 'package:edi301/constants/member_types.dart';
 import 'package:flutter/material.dart';
 import 'package:edi301/services/search_api.dart';
 import 'package:edi301/models/family_model.dart';
@@ -137,51 +138,84 @@ class AddFamilyController {
   Future<void> save(BuildContext context) async {
     _loading.value = true;
     try {
-      // 1) Crear familia
+      final isInternal = _internalResidence.value;
+      final direccion = isInternal ? null : addressCtrl.text.trim();
+
+      if (!isInternal && (direccion == null || direccion.isEmpty)) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'La dirección es requerida para residencia EXTERNA',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      if (_pickedFather == null && _pickedMother == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Selecciona al menos Papá o Mamá')),
+          );
+        }
+        return;
+      }
+
+      // 1) Crear familia ENVIANDO papa_id, mama_id, residencia y (si aplica) direccion
       final created = await _familiaApi.createFamily(
-        nombreFamilia: _familyName.value.trim(),
-        residencia: _internalResidence.value ? 'INTERNA' : 'EXTERNA',
-        direccion: _internalResidence.value
+        nombreFamilia: _familyName.value.trim().isEmpty
+            ? 'Familia'
+            : _familyName.value.trim(),
+        residencia: isInternal ? 'INTERNA' : 'EXTERNA',
+        direccion: direccion,
+        papaId: _pickedFather?.id, // << AQUI mandamos los IDs
+        mamaId: _pickedMother?.id, // << AQUI mandamos los IDs
+      );
+      final withNames = created.copyWith(
+        fatherName: _pickedFather == null
             ? null
-            : (addressCtrl.text.trim().isEmpty
-                  ? null
-                  : addressCtrl.text.trim()),
+            : '${_pickedFather!.nombre} ${_pickedFather!.apellido}'.trim(),
+        motherName: _pickedMother == null
+            ? null
+            : '${_pickedMother!.nombre} ${_pickedMother!.apellido}'.trim(),
       );
 
-      // 2) Registrar miembros (usando id_usuario directo)
+      // 2) Registrar miembros (si tu endpoint createFamily no vincula padres/hijos)
       if (_pickedFather != null) {
         await _membersApi.addMember(
           idFamilia: created.id!,
           idUsuario: _pickedFather!.id,
-          tipoMiembro: 'PADRE',
+          tipoMiembro: MemberTypes.padre, // PADRE
         );
       }
       if (_pickedMother != null) {
         await _membersApi.addMember(
           idFamilia: created.id!,
           idUsuario: _pickedMother!.id,
-          tipoMiembro: 'MADRE',
+          tipoMiembro: MemberTypes.madre, // MADRE
         );
       }
       for (final kid in children.value) {
         await _membersApi.addMember(
           idFamilia: created.id!,
           idUsuario: kid.id,
-          tipoMiembro: 'HIJO',
+          tipoMiembro: MemberTypes.hijo, // HIJO
         );
       }
 
-      // 3) Refresca lista local
-      final list = [...familyList.value]..add(created);
-      familyList.value = list;
+      // 3) Actualiza lista local + feedback
+      final list = [...AddFamilyController.familyList.value]..add(withNames);
+      AddFamilyController.familyList.value = list;
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Familia creada con éxito')),
         );
+        Navigator.of(context).pop(true);
       }
 
-      // Limpia
+      // Limpieza
       _pickedFather = null;
       _pickedMother = null;
       fatherCtrl.clear();

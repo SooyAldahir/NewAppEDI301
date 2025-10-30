@@ -1,11 +1,12 @@
-import 'package:dio/dio.dart';
-import '../core/api_client.dart';
+// lib/services/search_api.dart
+import 'dart:convert';
+import '../core/api_client_http.dart';
 
 class UserMini {
   final int id;
   final String nombre;
   final String apellido;
-  final String tipo; // 'ALUMNO' | 'EMPLEADO'
+  final String tipo; // 'ALUMNO' | 'EMPLEADO' | 'EXTERNO'
   final int? matricula;
   final int? numEmpleado;
   final String? email;
@@ -66,11 +67,12 @@ class SearchResult {
     required this.familias,
     required this.externos,
   });
+
   factory SearchResult.fromJson(Map<String, dynamic> j) => SearchResult(
     alumnos: _parseUsers(j['alumnos']),
     empleados: _parseUsers(j['empleados']),
     familias: _parseFamilies(j['familias']),
-    externos: _parseUsers(j['externos']), // 👈 si no viene, deja []
+    externos: _parseUsers(j['externos']),
   );
 }
 
@@ -93,24 +95,16 @@ List<FamilyMini> _parseFamilies(dynamic v) {
 }
 
 class SearchApi {
-  final Dio _dio = ApiClient().dio;
+  final ApiHttp _http = ApiHttp();
 
-  // Devuelve Response con data=[] si la petición falla
-  Future<Response> _safeGet(String path, {Map<String, dynamic>? query}) async {
+  /// GET seguro: devuelve el body ya decodificado (List/Map) o [] si falla.
+  Future<dynamic> _safeGet(String path, {Map<String, dynamic>? query}) async {
     try {
-      return await _dio.get(path, queryParameters: query);
-    } on DioException catch (e) {
-      // Opcional: log para depurar
-      // print('GET $path ❌ ${e.response?.statusCode} ${e.response?.data}');
-      return Response(
-        requestOptions: RequestOptions(path: path),
-        data: const [],
-      );
+      final res = await _http.getJson(path, query: query);
+      if (res.statusCode >= 400) return const [];
+      return jsonDecode(res.body);
     } catch (_) {
-      return Response(
-        requestOptions: RequestOptions(path: path),
-        data: const [],
-      );
+      return const [];
     }
   }
 
@@ -118,16 +112,16 @@ class SearchApi {
     final q = input.trim();
     if (q.isEmpty) {
       return SearchResult(
-        alumnos: [],
-        empleados: [],
-        familias: [],
-        externos: [],
+        alumnos: const [],
+        empleados: const [],
+        familias: const [],
+        externos: const [],
       );
     }
 
     final isNumeric = RegExp(r'^\d+$').hasMatch(q);
 
-    // Peticiones en paralelo
+    // Peticiones en paralelo (ajusta los paths a tu backend real)
     final alumnosF = _safeGet(
       '/api/usuarios',
       query: {'tipo': 'ALUMNO', 'q': q},
@@ -139,72 +133,59 @@ class SearchApi {
     final externosF = _safeGet(
       '/api/usuarios',
       query: {'tipo': 'EXTERNO', 'q': q},
-    ); // 👈 NUEVO
+    );
 
     final familiasByMatF = isNumeric
         ? _safeGet(
             '/api/usuarios/familias/by-doc/search',
             query: {'matricula': q},
           )
-        : Future.value(
-            Response(
-              requestOptions: RequestOptions(path: ''),
-              data: const [],
-            ),
-          );
+        : Future.value(const []);
     final familiasByEmpF = isNumeric
         ? _safeGet(
             '/api/usuarios/familias/by-doc/search',
             query: {'numEmpleado': q},
           )
-        : Future.value(
-            Response(
-              requestOptions: RequestOptions(path: ''),
-              data: const [],
-            ),
-          );
+        : Future.value(const []);
     final familiasByNameF = !isNumeric
         ? _safeGet('/api/familias/search', query: {'name': q})
-        : Future.value(
-            Response(
-              requestOptions: RequestOptions(path: ''),
-              data: const [],
-            ),
-          );
+        : Future.value(const []);
 
-    final resps = await Future.wait<Response>([
+    final resps = await Future.wait<dynamic>([
       alumnosF, // 0
       empleadosF, // 1
       familiasByMatF, // 2
       familiasByEmpF, // 3
       familiasByNameF, // 4
-      externosF, // 5 👈
+      externosF, // 5
     ]);
 
     List<dynamic> _ensureList(dynamic d) {
       if (d == null) return const [];
       if (d is List) return d;
-      if (d is Map && d.containsKey('data') && d['data'] is List)
+      if (d is Map && d.containsKey('data') && d['data'] is List) {
         return d['data'] as List;
-      if (d is Map && d.containsKey('rows') && d['rows'] is List)
+      }
+      if (d is Map && d.containsKey('rows') && d['rows'] is List) {
         return d['rows'] as List;
-      if (d is Map && d.values.length == 1 && d.values.first is List)
+      }
+      if (d is Map && d.values.length == 1 && d.values.first is List) {
         return List.from(d.values.first as List);
+      }
       return const [];
     }
 
-    final alumnos = _ensureList(resps[0].data)
+    final alumnos = _ensureList(resps[0])
         .map((e) => UserMini.fromJson(Map<String, dynamic>.from(e)))
         .where((u) => u.tipo.toUpperCase() == 'ALUMNO')
         .toList();
 
-    final empleados = _ensureList(resps[1].data)
+    final empleados = _ensureList(resps[1])
         .map((e) => UserMini.fromJson(Map<String, dynamic>.from(e)))
         .where((u) => u.tipo.toUpperCase() == 'EMPLEADO')
         .toList();
 
-    // 👇 externos reales desde el backend
-    final externos = _ensureList(resps[5].data)
+    final externos = _ensureList(resps[5])
         .map((e) => UserMini.fromJson(Map<String, dynamic>.from(e)))
         .where((u) => u.tipo.toUpperCase() == 'EXTERNO')
         .toList();
@@ -213,17 +194,18 @@ class SearchApi {
     List<FamilyMini> familias;
     if (isNumeric) {
       final a = _ensureList(
-        resps[2].data,
+        resps[2],
       ).map((e) => FamilyMini.fromJson(Map<String, dynamic>.from(e))).toList();
       final b = _ensureList(
-        resps[3].data,
+        resps[3],
       ).map((e) => FamilyMini.fromJson(Map<String, dynamic>.from(e))).toList();
+      // unir y deduplicar por id
       final map = <int, FamilyMini>{};
       for (final f in [...a, ...b]) map[f.id] = f;
       familias = map.values.toList();
     } else {
       familias = _ensureList(
-        resps[4].data,
+        resps[4],
       ).map((e) => FamilyMini.fromJson(Map<String, dynamic>.from(e))).toList();
     }
 
@@ -231,7 +213,7 @@ class SearchApi {
       alumnos: alumnos,
       empleados: empleados,
       familias: familias,
-      externos: externos, // 👈 ya no va vacío
+      externos: externos,
     );
   }
 }
@@ -243,6 +225,5 @@ int? _toIntOrNull(dynamic v) {
   if (v is num) return v.toInt();
   final s = v.toString().trim();
   if (s.isEmpty) return null;
-  final n = int.tryParse(s);
-  return n;
+  return int.tryParse(s);
 }

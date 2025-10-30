@@ -1,15 +1,18 @@
-// lib/services/users_api.dart
-import 'package:dio/dio.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../core/api_client.dart';
+import '../core/api_client_http.dart';
 import '../models/user.dart';
 import 'package:edi301/models/family_model.dart' as fm;
 
 class UsersApi {
-  final Dio _dio = ApiClient().dio;
+  final ApiHttp _http = ApiHttp();
 
   Future<void> deleteSoft(int id) async {
-    await _dio.delete('/api/users/$id');
+    final res = await _http.deleteJson('/api/users/$id');
+    if (res.statusCode >= 400) {
+      throw Exception('No se pudo eliminar: ${res.statusCode} ${res.body}');
+    }
   }
 
   /// Familias por documento (matrícula o numEmpleado)
@@ -17,15 +20,15 @@ class UsersApi {
     int? matricula,
     int? numEmpleado,
   }) async {
-    final r = await _dio.get(
+    final res = await _http.getJson(
       '/api/users/familias/by-doc/search',
-      queryParameters: {
+      query: {
         if (matricula != null) 'matricula': matricula,
         if (numEmpleado != null) 'numEmpleado': numEmpleado,
       },
     );
 
-    final data = r.data;
+    final data = jsonDecode(res.body);
     if (data is List) {
       return data
           .map((e) => fm.Family.fromJson(Map<String, dynamic>.from(e)))
@@ -56,8 +59,11 @@ class UsersApi {
       "Contrasena": contrasena,
       "Estado": estado,
     };
-    final r = await _dio.post('/api/users/register', data: payload);
-    final id = r.data['IdUsuario'] as int;
+    final res = await _http.postJson('/api/users/register', data: payload);
+    if (res.statusCode >= 400) {
+      throw Exception('Error ${res.statusCode}: ${res.body}');
+    }
+    final id = (jsonDecode(res.body) as Map)['IdUsuario'] as int;
     return getById(id);
   }
 
@@ -78,38 +84,77 @@ class UsersApi {
       "Contrasena": contrasena,
       "Estado": estado,
     };
-    final r = await _dio.post('/api/users/register', data: payload);
-    final id = r.data['IdUsuario'] as int;
+    final r = await _http.postJson('/api/users/register', data: payload);
+    if (r.statusCode >= 400) {
+      throw Exception('Error ${r.statusCode}: ${r.body}');
+    }
+    final id = (jsonDecode(r.body) as Map)['IdUsuario'] as int;
     return getById(id);
   }
 
   Future<User> login(String email, String password) async {
-    final r = await _dio.post(
-      '/api/users/login',
+    final r = await _http.postJson(
+      '/api/users/login', // o '/api/auth/login' si así es tu ruta real
       data: {"E_mail": email, "Contrasena": password},
     );
-    final user = User.fromJson(r.data);
-    if (user.token != null) {
+    if (r.statusCode >= 400) {
+      throw Exception('Error ${r.statusCode}: ${r.body}');
+    }
+
+    // <<<< aquí era jsonDecode (no jsonEncode)
+    final Map<String, dynamic> data =
+        jsonDecode(r.body) as Map<String, dynamic>;
+
+    final user = User.fromJson(data);
+
+    final token = (data['session_token'] ?? data['token'] ?? '').toString();
+    if (token.isNotEmpty) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('session_token', user.token!);
+      await prefs.setString('session_token', token);
+      await prefs.setString('user', jsonEncode(data));
     }
     return user;
   }
 
   Future<User> getById(int id) async {
-    final r = await _dio.get('/api/users/$id');
-    return User.fromJson(r.data);
+    final r = await _http.getJson('/api/users/$id');
+    if (r.statusCode >= 400) {
+      throw Exception('Error ${r.statusCode}: ${r.body}');
+    }
+
+    // <<<< aquí también era jsonDecode
+    final Map<String, dynamic> data =
+        jsonDecode(r.body) as Map<String, dynamic>;
+
+    return User.fromJson(data);
   }
 
   Future<List<User>> search({String? q, String? tipo}) async {
-    final r = await _dio.get(
+    final r = await _http.getJson(
       '/api/users',
-      queryParameters: {
+      query: {
         if (q != null && q.isNotEmpty) 'q': q,
         if (tipo != null && tipo.isNotEmpty) 'tipo': tipo,
       },
     );
-    return (r.data as List).map((e) => User.fromJson(e)).toList();
+    if (r.statusCode >= 400) {
+      throw Exception('Error ${r.statusCode}: ${r.body}');
+    }
+    final decoded = jsonDecode(r.body);
+    if (decoded is List) {
+      return decoded
+          .map<User>((e) => User.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    if (decoded is Map &&
+        decoded.values.length == 1 &&
+        decoded.values.first is List) {
+      final list = decoded.values.first as List;
+      return list
+          .map<User>((e) => User.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return <User>[];
   }
 
   Future<User> update(
@@ -120,16 +165,21 @@ class UsersApi {
     bool? esActivo,
     bool? esAdmin,
   }) async {
-    final r = await _dio.patch(
-      '/api/users/$id',
-      data: {
-        if (nombre != null) "Nombre": nombre,
-        if (apellido != null) "Apellido": apellido,
-        if (estado != null) "Estado": estado,
-        if (esActivo != null) "es_Activo": esActivo,
-        if (esAdmin != null) "es_Admin": esAdmin,
-      },
-    );
-    return User.fromJson(r.data);
+    final Map<String, dynamic> payload = <String, dynamic>{
+      if (nombre != null) "Nombre": nombre,
+      if (apellido != null) "Apellido": apellido,
+      if (estado != null) "Estado": estado,
+      if (esActivo != null) "es_Activo": esActivo,
+      if (esAdmin != null) "es_Admin": esAdmin,
+    };
+
+    final r = await _http.patchJson('/api/users/$id', data: payload);
+    if (r.statusCode >= 400) {
+      throw Exception('Error ${r.statusCode}: ${r.body}');
+    }
+
+    final Map<String, dynamic> data =
+        jsonDecode(r.body) as Map<String, dynamic>;
+    return User.fromJson(data);
   }
 }

@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../core/api_client.dart'; // tu ApiClient con Dio
+import '../core/api_client_http.dart';
 
 class LoginController {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
   final loading = ValueNotifier<bool>(false);
 
+  final ApiHttp _http = ApiHttp();
   late BuildContext _ctx;
 
   void init(BuildContext context) => _ctx = context;
@@ -23,33 +24,46 @@ class LoginController {
   }
 
   Future<void> goToHomePage() async {
-    // login_controller.dart (lo importante)
-    final dio = ApiClient().dio;
+    final login = emailCtrl.text.trim();
+    final password = passCtrl.text;
+
+    if (login.isEmpty || password.isEmpty) {
+      _snack('Ingresa usuario y contraseña');
+      return;
+    }
 
     loading.value = true;
     try {
-      final res = await dio.post(
+      final res = await _http.postJson(
         '/api/auth/login',
         data: {
-          'login': emailCtrl.text.trim(), // correo / matrícula / num_empleado
-          'password': passCtrl.text,
+          'login': login, // correo / matrícula / num_empleado
+          'password': password,
         },
       );
 
-      final data = Map<String, dynamic>.from(res.data ?? {});
-      final token = (data['session_token'] ?? '').toString();
-      if (token.isEmpty) {
-        throw Exception('No se recibió session_token');
+      if (res.statusCode >= 400) {
+        throw Exception('Credenciales inválidas (${res.statusCode})');
       }
+
+      final Map<String, dynamic> data =
+          jsonDecode(res.body) as Map<String, dynamic>;
+
+      final token = (data['session_token'] ?? data['token'] ?? '').toString();
+      if (token.isEmpty) throw Exception('No se recibió session_token');
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('session_token', token);
       await prefs.setString('user', jsonEncode(data));
 
+      // Ruteo opcional según rol/tipo
+      final rol = (data['rol'] ?? data['role'] ?? '').toString();
+      final tipoUsuario = (data['TipoUsuario'] ?? data['tipoUsuario'] ?? '')
+          .toString();
+      final route = _routeForRole(rol, tipoUsuario);
+
       FocusScope.of(_ctx).unfocus();
-      Navigator.of(
-        _ctx,
-      ).pushNamedAndRemoveUntil('home', (_) => false); // ← SIEMPRE HOME
+      Navigator.of(_ctx).pushNamedAndRemoveUntil(route, (_) => false);
     } catch (e) {
       _snack(e.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -64,14 +78,12 @@ class LoginController {
         return 'admin';
       case 'PapaEDI':
       case 'MamaEDI':
-        return 'home'; // tu home para padres
+        return 'home';
       case 'HijoEDI':
       case 'HijoSanguineo':
-        return 'home'; // si luego quieres otra pantalla, crea 'home_child'
+        return 'home';
       default:
-        // EXTERNO se trata como padre, aunque venga con rol distinto
         if (tipoUsuario == 'EXTERNO') return 'home';
-        // fallback
         return 'home';
     }
   }

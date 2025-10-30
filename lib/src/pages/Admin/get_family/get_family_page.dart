@@ -116,7 +116,7 @@ class _GetFamiliyPageState extends State<GetFamilyPage> {
               Navigator.pushNamed(
                 context,
                 'family_detail', // 👈 nueva ruta
-                arguments: index, // pasamos el índice
+                arguments: f, // pasamos el índice
               );
             },
             child: Padding(

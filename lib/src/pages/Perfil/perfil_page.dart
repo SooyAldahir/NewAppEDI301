@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'package:edi301/core/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:edi301/core/api_client_http.dart';
 import 'package:edi301/src/pages/Perfil/perfil_widgets.dart';
 
 class PerfilPage extends StatefulWidget {
@@ -36,6 +36,8 @@ class _PerfilPageState extends State<PerfilPage> {
   bool _loading = true;
   final primary = const Color.fromRGBO(19, 67, 107, 1);
 
+  final ApiHttp _http = ApiHttp();
+
   @override
   void initState() {
     super.initState();
@@ -49,63 +51,78 @@ class _PerfilPageState extends State<PerfilPage> {
     if (raw == null) return;
     final u = jsonDecode(raw) as Map<String, dynamic>;
 
+    String nombre = (u['nombre'] ?? u['Nombre'] ?? '').toString();
+    String apellido = (u['apellido'] ?? u['Apellido'] ?? '').toString();
+
     setState(() {
       data = {
         ...data,
-        'name':
-            '${(u['nombre'] ?? '').toString()} ${(u['apellido'] ?? '').toString()}'
-                .trim()
-                .isEmpty
+        'name': (('$nombre $apellido').trim().isEmpty)
             ? '—'
-            : '${u['nombre'] ?? ''} ${u['apellido'] ?? ''}'.trim(),
-        'email': (u['correo'] ?? '—').toString(),
-        'matricula': (u['matricula'] ?? '—').toString(),
-        'phone': (u['telefono'] ?? '—').toString(),
-        'residence': (u['residencia'] ?? '—').toString(), // Interna | Externa
-        'address': (u['direccion'] ?? '—').toString(),
-        'birthday': (u['fecha_nacimiento'] ?? '—').toString(),
-        'avatarUrl': (u['foto_perfil'] ?? data['avatarUrl']).toString(),
-        'status': (u['estado'] ?? 'Activo').toString(),
+            : ('$nombre $apellido').trim(),
+        'email': (u['correo'] ?? u['E_mail'] ?? '—').toString(),
+        'matricula': (u['matricula'] ?? u['Matricula'] ?? '—').toString(),
+        'phone': (u['telefono'] ?? u['Telefono'] ?? '—').toString(),
+        'residence': (u['residencia'] ?? u['Residencia'] ?? '—').toString(),
+        'address': (u['direccion'] ?? u['Direccion'] ?? '—').toString(),
+        'birthday': (u['fecha_nacimiento'] ?? u['Fecha_Nacimiento'] ?? '—')
+            .toString(),
+        'avatarUrl': (u['foto_perfil'] ?? u['FotoPerfil'] ?? data['avatarUrl'])
+            .toString(),
+        'status': (u['estado'] ?? u['Estado'] ?? 'Activo').toString(),
         'grade': (u['carrera'] ?? '—').toString(), // para alumnos
       };
     });
   }
 
-  // 2) (Opcional) Completa desde API /api/usuarios/:id para traer campos nuevos/actualizados
+  // 2) Completa desde API /api/users/:id para traer campos nuevos/actualizados
   Future<void> _fetchFromServer() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString('user');
       if (raw == null) return;
       final u = jsonDecode(raw) as Map<String, dynamic>;
-      final id = u['id_usuario'];
+      final id = u['IdUsuario'] ?? u['id_usuario'] ?? u['id'] ?? u['Id'];
 
-      final dio = ApiClient().dio;
-      final res = await dio.get(
-        '/api/usuarios/$id',
+      if (id == null) return;
+
+      final res = await _http.getJson(
+        '/api/users/$id',
       ); // ajusta si tu endpoint difiere
-      final x = Map<String, dynamic>.from(res.data ?? {});
+      if (res.statusCode >= 400) return;
+
+      final x = jsonDecode(res.body) as Map<String, dynamic>;
+
+      String nombre = (x['nombre'] ?? x['Nombre'] ?? u['nombre'] ?? '')
+          .toString();
+      String apellido = (x['apellido'] ?? x['Apellido'] ?? u['apellido'] ?? '')
+          .toString();
 
       setState(() {
         data = {
           ...data,
-          'name':
-              '${(x['nombre'] ?? u['nombre'] ?? '')} ${(x['apellido'] ?? u['apellido'] ?? '')}'
-                  .trim()
-                  .isEmpty
+          'name': (('$nombre $apellido').trim().isEmpty)
               ? data['name']
-              : '${x['nombre'] ?? u['nombre'] ?? ''} ${(x['apellido'] ?? u['apellido'] ?? '')}',
-          'email': (x['correo'] ?? u['correo'] ?? data['email']).toString(),
-          'matricula': (x['matricula'] ?? u['matricula'] ?? data['matricula'])
+              : ('$nombre $apellido').trim(),
+          'email': (x['correo'] ?? x['E_mail'] ?? data['email']).toString(),
+          'matricula': (x['matricula'] ?? x['Matricula'] ?? data['matricula'])
               .toString(),
-          'phone': (x['telefono'] ?? data['phone']).toString(),
-          'residence': (x['residencia'] ?? data['residence']).toString(),
-          'address': (x['direccion'] ?? data['address']).toString(),
-          'birthday': (x['fecha_nacimiento'] ?? data['birthday']).toString(),
-          'avatarUrl': (x['foto_perfil'] ?? data['avatarUrl']).toString(),
-          'status': (x['estado'] ?? data['status']).toString(),
+          'phone': (x['telefono'] ?? x['Telefono'] ?? data['phone']).toString(),
+          'residence': (x['residencia'] ?? x['Residencia'] ?? data['residence'])
+              .toString(),
+          'address': (x['direccion'] ?? x['Direccion'] ?? data['address'])
+              .toString(),
+          'birthday':
+              (x['fecha_nacimiento'] ??
+                      x['Fecha_Nacimiento'] ??
+                      data['birthday'])
+                  .toString(),
+          'avatarUrl':
+              (x['foto_perfil'] ?? x['FotoPerfil'] ?? data['avatarUrl'])
+                  .toString(),
+          'status': (x['estado'] ?? x['Estado'] ?? data['status']).toString(),
           'grade': (x['carrera'] ?? data['grade']).toString(),
-          // 'family'  : podrías llenar con /api/miembros/familia o un endpoint /usuarios/:id/familia
+          // 'family': podrías llenar con /api/users/:id/familia si existe
         };
       });
     } catch (_) {
@@ -132,8 +149,11 @@ class _PerfilPageState extends State<PerfilPage> {
 
   Color _statusColor(String st) {
     final low = st.toLowerCase();
-    if (low.contains('inac') || low.contains('baja') || low.contains('suspend'))
+    if (low.contains('inac') ||
+        low.contains('baja') ||
+        low.contains('suspend')) {
       return Colors.red;
+    }
     if (low.contains('pend') || low.contains('proce')) return Colors.orange;
     return Colors.green;
   }
@@ -152,7 +172,6 @@ class _PerfilPageState extends State<PerfilPage> {
     return Scaffold(
       backgroundColor: const Color(0xfff7f8fa),
       body: RefreshIndicator(
-        // pull-to-refresh para re-cargar del server
         onRefresh: _loadProfile,
         child: NestedScrollView(
           floatHeaderSlivers: true,
@@ -182,14 +201,13 @@ class _PerfilPageState extends State<PerfilPage> {
   }
 
   Widget _buildContent(BuildContext context) {
-    final p = primary; // alias corto
+    final p = primary;
 
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600),
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          // para que el RefreshIndicator funcione incluso sin contenido
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             HeaderCard(

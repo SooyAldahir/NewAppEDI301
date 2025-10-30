@@ -11,124 +11,61 @@ class FamilyDetailPage extends StatefulWidget {
 }
 
 class _FamilyDetailPageState extends State<FamilyDetailPage> {
-  late int index;
-  late Family f;
+  Family? f;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    index = ModalRoute.of(context)!.settings.arguments as int;
-    f = AddFamilyController.familyList.value[index]; // <-- aquí
-  }
-
-  Future<void> _confirmDelete({
-    required String title,
-    required String message,
-    required VoidCallback onConfirm,
-  }) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false, // evita cierre tocando fuera
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) onConfirm();
-  }
-
-  Future<void> _goToAddStudents() async {
-    final result = await Navigator.pushNamed(
-      context,
-      'add_alumns',
-      arguments: f.familyName, // 👈 familia preseleccionada
-    );
-
-    if (result == true && mounted) {
-      setState(() {
-        // la lista estática ya se modificó; solo refrescamos la UI
+    final args = ModalRoute.of(context)!.settings.arguments;
+    if (args is Family) {
+      f = args;
+    } else {
+      // fallback: sal con mensaje si no llegó lo esperado
+      Future.microtask(() {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir la familia')),
+        );
+        Navigator.pop(context);
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Alumnos agregados')));
     }
-  }
-
-  void _removeHousehold(String child) {
-    _confirmDelete(
-      title: 'Eliminar hijo en casa',
-      message: '¿Eliminar "$child" de Hijos en casa?',
-      onConfirm: () {
-        AddFamilyController.removeHouseholdChild(index, child);
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Se eliminó "$child" de hijos en casa')),
-        );
-      },
-    );
-  }
-
-  void _removeAssigned(String student) {
-    _confirmDelete(
-      title: 'Eliminar alumno asignado',
-      message: '¿Eliminar "$student" de Alumnos asignados?',
-      onConfirm: () {
-        AddFamilyController.removeAssignedStudent(index, student);
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Se eliminó "$student" de alumnos asignados')),
-        );
-      },
-    );
-  }
-
-  void _viewStudent(String student) {
-    // página de detalle de alumno (puedes ajustarla a tu modelo real)
-    Navigator.pushNamed(context, 'student_detail', arguments: student);
   }
 
   @override
   Widget build(BuildContext context) {
-    // refrescar ref por si la lista cambió
-    f = AddFamilyController.familyList.value[index];
-
+    if (f == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final fam = f!;
     return Scaffold(
       appBar: AppBar(
-        title: Text(f.familyName),
+        title: Text(fam.familyName),
         backgroundColor: const Color.fromRGBO(19, 67, 107, 1),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _Header(f: f),
+          _Header(f: fam),
           const SizedBox(height: 16),
           _Section(
             title: 'Hijos en casa',
-            items: f.householdChildren,
+            items: fam.householdChildren,
             emptyText: 'Sin hijos registrados en casa.',
             buildTrailing: (child) => IconButton(
               tooltip: 'Eliminar',
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _removeHousehold(child),
+              onPressed: () {
+                // Si aún quieres soportar borrar aquí, necesitarías
+                // una fuente de verdad para actualizar (id + endpoint o
+                // un estado central). Por ahora, si tu lógica era local:
+                // AddFamilyController.removeHouseholdChild(index, child);
+              },
             ),
             leadingIcon: Icons.family_restroom,
           ),
           const SizedBox(height: 12),
           _Section(
             title: 'Alumnos asignados',
-            items: f.assignedStudents,
+            items: fam.assignedStudents,
             emptyText: 'Sin alumnos asignados.',
             buildTrailing: (student) => Row(
               mainAxisSize: MainAxisSize.min,
@@ -136,13 +73,13 @@ class _FamilyDetailPageState extends State<FamilyDetailPage> {
                 IconButton(
                   tooltip: 'Ver detalles',
                   icon: const Icon(Icons.info_outline),
-                  onPressed: () => _viewStudent(student),
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    'student_detail',
+                    arguments: student,
+                  ),
                 ),
-                IconButton(
-                  tooltip: 'Eliminar',
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _removeAssigned(student),
-                ),
+                // Ídem comentario de “fuente de verdad” si quisieras eliminar aquí
               ],
             ),
             leadingIcon: Icons.school,
@@ -158,7 +95,18 @@ class _FamilyDetailPageState extends State<FamilyDetailPage> {
               ),
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            onPressed: _goToAddStudents,
+            onPressed: () async {
+              final result = await Navigator.pushNamed(
+                context,
+                'add_alumns',
+                arguments: fam.familyName,
+              );
+              if (result == true && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Alumnos agregados')),
+                );
+              }
+            },
           ),
         ],
       ),

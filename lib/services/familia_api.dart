@@ -1,11 +1,11 @@
 // lib/services/familia_api.dart
-import 'package:dio/dio.dart';
-import 'package:edi301/core/api_client.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:edi301/core/api_client_http.dart';
 import 'package:edi301/models/family_model.dart';
-import 'package:flutter/material.dart';
 
 class FamiliaApi {
-  final Dio _dio = ApiClient().dio;
+  final ApiHttp _http = ApiHttp();
 
   String _normalizeResidence(String r) {
     final s = r.trim().toUpperCase();
@@ -16,49 +16,75 @@ class FamiliaApi {
 
   Future<Family> createFamily({
     required String nombreFamilia,
-    required String residencia,
-    String? direccion,
+    required String residencia, // 'INTERNA' | 'EXTERNA'
+    String? direccion, // requerido si EXTERNA
+    int? papaId, // << NUEVO (usa snake_case de tu tabla)
+    int? mamaId, // << NUEVO
   }) async {
     final payload = <String, dynamic>{
       'nombre_familia': nombreFamilia,
       'residencia': _normalizeResidence(residencia),
       if (direccion != null && direccion.trim().isNotEmpty)
         'direccion': direccion.trim(),
+      if (papaId != null) 'papa_id': papaId,
+      if (mamaId != null) 'mama_id': mamaId,
     };
-    final r = await _dio.post(
-      '/api/familias',
-      data: payload,
-      options: Options(validateStatus: (_) => true), // <- no lance en 400
-    );
-    debugPrint('POST /api/familias -> ${r.statusCode} :: ${r.data}');
 
-    final data = r.data;
-    final Map<String, dynamic> m = (data is Map && data['data'] is Map)
-        ? Map<String, dynamic>.from(data['data'])
-        : Map<String, dynamic>.from(data as Map);
-    return Family.fromJson(m);
+    final res = await _http.postJson('/api/familias', data: payload);
+    debugPrint('POST /api/familias -> ${res.statusCode} :: ${res.body}');
+    if (res.statusCode >= 400) {
+      throw Exception('Error ${res.statusCode}: ${res.body}');
+    }
+
+    final decoded = jsonDecode(res.body);
+    if (decoded is Map<String, dynamic>) {
+      final Map<String, dynamic> m = decoded['data'] is Map
+          ? Map<String, dynamic>.from(decoded['data'])
+          : decoded;
+      return Family.fromJson(m);
+    }
+    throw Exception('Respuesta inválida del servidor al crear familia');
   }
 
   Future<List<Map<String, dynamic>>> buscarFamiliasPorNombre(String q) async {
-    final r = await _dio.get(
-      '/api/familias/search',
-      queryParameters: {'name': q},
-    );
-    final data = r.data;
-    if (data is List) return data.cast<Map<String, dynamic>>();
+    final res = await _http.getJson('/api/familias/search', query: {'name': q});
+    if (res.statusCode >= 400) {
+      throw Exception('Error ${res.statusCode}: ${res.body}');
+    }
+
+    final data = jsonDecode(res.body);
+    if (data is List) {
+      return data
+          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    }
+    if (data is Map && data.values.isNotEmpty && data.values.first is List) {
+      final list = data.values.first as List;
+      return list
+          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    }
     return <Map<String, dynamic>>[];
   }
 
   Future<Map<String, dynamic>?> getById(int id) async {
-    final r = await _dio.get('/api/familias/$id');
-    final data = r.data;
+    final res = await _http.getJson('/api/familias/$id');
+    if (res.statusCode >= 400) {
+      throw Exception('Error ${res.statusCode}: ${res.body}');
+    }
+
+    final data = jsonDecode(res.body);
     if (data is Map) return Map<String, dynamic>.from(data);
     return null;
   }
 
   Future<Map<String, dynamic>?> getByIdent(int ident) async {
-    final r = await _dio.get('/api/familias/por-ident/$ident');
-    final data = r.data;
+    final res = await _http.getJson('/api/familias/por-ident/$ident');
+    if (res.statusCode >= 400) {
+      throw Exception('Error ${res.statusCode}: ${res.body}');
+    }
+
+    final data = jsonDecode(res.body);
     if (data is Map) return Map<String, dynamic>.from(data);
     return null;
   }

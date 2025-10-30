@@ -1,40 +1,116 @@
 // lib/models/family_model.dart
 class Family {
-  final int? id; // id en BD
-  final String familyName; // "Familia Pérez López"
-  final String fatherName; // nombre del padre (si lo tienes)
-  final String motherName; // nombre de la madre (si lo tienes)
-  final String residence; // 'Interna' | 'Externa' | 'Desconocida'
-  final String? address; // solo si es Externa
+  // PK unificada
+  final int? id; // mapea id_familia / FamiliaID / id
 
-  // Solo para UI (no vienen del backend)
-  final List<String> assignedStudents; // alumnos asignados
-  final List<String> householdChildren; // hijos en casa
+  // Campos principales
+  final String familyName;
+  final String? fatherName;
+  final String? motherName;
+  final String? residencia; // 'INTERNA' | 'EXTERNA'
+  final String? direccion;
 
-  final int? fatherEmployeeId; // num. empleado padre (si aplica)
-  final int? motherEmployeeId; // num. empleado madre (si aplica)
+  // ------- Compatibilidad con versiones anteriores de tu UI -------
+  // Listas usadas sólo por UI local (no vienen de la BD)
+  final List<String> assignedStudents; // "Alumnos asignados" (fake/local)
+  final List<String> householdChildren; // "Hijos en casa"   (fake/local)
+
+  // IDs de empleados (si algún día los quieres poblar)
+  final int? fatherEmployeeId;
+  final int? motherEmployeeId;
+
+  // Getter legacy para no romper referencias: f.residence -> f.residencia
+  String get residence => residencia ?? '';
 
   const Family({
-    this.id,
+    required this.id,
     required this.familyName,
-    this.fatherName = '',
-    this.motherName = '',
-    this.residence = 'Desconocida',
-    this.address,
+    this.fatherName,
+    this.motherName,
+    this.residencia,
+    this.direccion,
     this.assignedStudents = const [],
     this.householdChildren = const [],
     this.fatherEmployeeId,
     this.motherEmployeeId,
   });
 
+  factory Family.fromJson(Map<String, dynamic> j) {
+    // normaliza residencia a 'Interna' / 'Externa' si es posible
+    String? _normalizeRes(dynamic v) {
+      if (v == null) return null;
+      final s = v.toString().trim();
+      if (s.isEmpty) return null;
+      final up = s.toUpperCase();
+      if (up.startsWith('INT')) return 'Interna';
+      if (up.startsWith('EXT')) return 'Externa';
+      return s; // deja tal cual si viene otro valor
+    }
+
+    return Family(
+      id: (j['id_familia'] ?? j['FamiliaID'] ?? j['id']) as int?,
+      familyName:
+          (j['nombre_familia'] ?? j['Nombre_Familia'] ?? j['nombre'] ?? '')
+              .toString(),
+
+      // 👇 ahora tomamos los nombres del JOIN si existen
+      fatherName:
+          (j['papa_nombre'] ??
+                  j['Padre'] ??
+                  j['padre'] ??
+                  j['fatherName'] ??
+                  j['nombre_padre'])
+              ?.toString(),
+      motherName:
+          (j['mama_nombre'] ??
+                  j['Madre'] ??
+                  j['madre'] ??
+                  j['motherName'] ??
+                  j['nombre_madre'])
+              ?.toString(),
+
+      // residencia y dirección
+      residencia: _normalizeRes(j['residencia'] ?? j['Residencia']),
+      direccion: (j['direccion'] ?? j['Direccion'])?.toString(),
+
+      // listas locales (UI)
+      assignedStudents: const [],
+      householdChildren: const [],
+
+      // ids de empleados (por compatibilidad con distintas claves)
+      fatherEmployeeId:
+          (j['papa_id'] ??
+                  j['Papa_id'] ??
+                  j['PapaId'] ??
+                  j['father_employee_id'])
+              as int?,
+      motherEmployeeId:
+          (j['mama_id'] ??
+                  j['Mama_id'] ??
+                  j['MamaId'] ??
+                  j['mother_employee_id'])
+              as int?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id_familia': id,
+    'nombre_familia': familyName,
+    'padre': fatherName,
+    'madre': motherName,
+    'residencia': residencia,
+    'direccion': direccion,
+    'papa_id': fatherEmployeeId,
+    'mama_id': motherEmployeeId,
+  };
+
   Family copyWith({
     int? id,
     String? familyName,
     String? fatherName,
     String? motherName,
-    String? residence,
-    String? address,
-    String? bio,
+    String? residencia,
+    String? direccion,
     List<String>? assignedStudents,
     List<String>? householdChildren,
     int? fatherEmployeeId,
@@ -45,50 +121,12 @@ class Family {
       familyName: familyName ?? this.familyName,
       fatherName: fatherName ?? this.fatherName,
       motherName: motherName ?? this.motherName,
-      residence: residence ?? this.residence,
-      address: address ?? this.address,
+      residencia: residencia ?? this.residencia,
+      direccion: direccion ?? this.direccion,
       assignedStudents: assignedStudents ?? this.assignedStudents,
       householdChildren: householdChildren ?? this.householdChildren,
       fatherEmployeeId: fatherEmployeeId ?? this.fatherEmployeeId,
       motherEmployeeId: motherEmployeeId ?? this.motherEmployeeId,
     );
   }
-
-  factory Family.fromJson(Map<String, dynamic> j) {
-    return Family(
-      id: j['FamiliaID'] ?? j['id_familia'] ?? j['id'],
-      familyName:
-          (j['Nombre_Familia'] ?? j['nombre_familia'] ?? j['nombre'] ?? '')
-              .toString(),
-      residence: (j['Residencia'] ?? j['residencia'] ?? 'Desconocida')
-          .toString(),
-      address: (j['Direccion'] ?? j['direccion'])?.toString(),
-      fatherName: (j['Padre'] ?? j['padre'] ?? '').toString(),
-      motherName: (j['Madre'] ?? j['madre'] ?? '').toString(),
-      fatherEmployeeId: _toInt(
-        j['NumEmpleadoPadre'] ?? j['padre_num_empleado'],
-      ),
-      motherEmployeeId: _toInt(
-        j['NumEmpleadoMadre'] ?? j['madre_num_empleado'],
-      ),
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-    'FamiliaID': id,
-    'Nombre_Familia': familyName,
-    'Residencia': residence,
-    if (address != null && address!.trim().isNotEmpty) 'Direccion': address,
-    if (fatherName.isNotEmpty) 'Padre': fatherName,
-    if (motherName.isNotEmpty) 'Madre': motherName,
-    if (fatherEmployeeId != null) 'NumEmpleadoPadre': fatherEmployeeId,
-    if (motherEmployeeId != null) 'NumEmpleadoMadre': motherEmployeeId,
-  };
-}
-
-int? _toInt(dynamic v) {
-  if (v == null) return null;
-  if (v is int) return v;
-  final s = v.toString();
-  return int.tryParse(s);
 }
