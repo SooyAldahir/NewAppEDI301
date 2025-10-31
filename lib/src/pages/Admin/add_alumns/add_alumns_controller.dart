@@ -1,88 +1,140 @@
-import 'package:edi301/constants/member_types.dart';
+// lib/src/pages/Admin/add_alumns/add_alumns_controller.dart
 import 'package:flutter/material.dart';
+import 'package:edi301/models/family_model.dart';
 import 'package:edi301/services/search_api.dart';
 import 'package:edi301/services/members_api.dart';
+import 'package:edi301/constants/member_types.dart';
 
 class AddAlumnsController {
   BuildContext? context;
-
-  final ValueNotifier<bool> loading = ValueNotifier<bool>(false);
-
   final _searchApi = SearchApi();
   final _membersApi = MembersApi();
 
-  Future<void> init(BuildContext context) async {
+  final loading = ValueNotifier<bool>(false);
+
+  // --- Estado que la UI observará ---
+  final ValueNotifier<Family?> selectedFamily = ValueNotifier(null);
+  final ValueNotifier<List<UserMini>> selectedAlumns = ValueNotifier([]);
+
+  void init(BuildContext context) {
     this.context = context;
   }
 
   void dispose() {
     loading.dispose();
+    selectedFamily.dispose();
+    selectedAlumns.dispose();
   }
 
-  /// Resultado del proceso para mostrar feedback
-  Future<AddResult> addAlumnsToFamily({
-    required int familyId,
-    required List<String> matriculas,
-  }) async {
-    loading.value = true;
+  // --- Lógica de Búsqueda ---
 
-    final added = <String>[];
-    final notFound = <String>[];
-    final errors = <String>[];
-
+  /// Busca familias por nombre para el autocompletado.
+  Future<List<Family>> searchFamilies(String query) async {
+    if (query.trim().isEmpty) return [];
     try {
-      for (final m in matriculas) {
-        final term = m.trim();
-        if (term.isEmpty) continue;
+      final result = await _searchApi.searchAll(query);
+      // Convertimos FamilyMini a Family para mantener consistencia
+      return result.familias
+          .map((f) => Family(id: f.id, familyName: f.nombre))
+          .toList();
+    } catch (e) {
+      debugPrint('Error buscando familias: $e');
+      return [];
+    }
+  }
 
-        // 1) Buscar alumno por matrícula
-        final res = await _searchApi.searchAll(term);
-        final match = res.alumnos.firstWhere(
-          (u) => (u.matricula?.toString() ?? '') == term,
-          orElse: () => null as dynamic,
-        );
+  /// Busca alumnos por matrícula o nombre para el autocompletado.
+  Future<List<UserMini>> searchAlumns(String query) async {
+    if (query.trim().isEmpty) return [];
+    try {
+      final result = await _searchApi.searchAll(query);
+      return result.alumnos;
+    } catch (e) {
+      debugPrint('Error buscando alumnos: $e');
+      return [];
+    }
+  }
 
-        if (match == null) {
-          notFound.add(term);
-          continue;
-        }
+  // --- Lógica de Selección ---
 
-        try {
-          // 2) Registrar como miembro tipo HijoSanguineo
-          await _membersApi.addMember(
-            idFamilia: familyId,
-            idUsuario: match.id,
-            tipoMiembro: MemberTypes.hijo, // << HIJO
-          );
-          added.add(term);
-        } catch (e) {
-          errors.add('$term (${e.toString()})');
-        }
-      }
-    } finally {
-      loading.value = false;
+  void selectFamily(Family family) {
+    selectedFamily.value = family;
+  }
+
+  void clearFamily() {
+    selectedFamily.value = null;
+  }
+
+  void addAlumn(UserMini alumn) {
+    final currentList = selectedAlumns.value;
+    // Evitar duplicados
+    if (!currentList.any((a) => a.id == alumn.id)) {
+      selectedAlumns.value = [...currentList, alumn];
+    }
+  }
+
+  void removeAlumn(UserMini alumn) {
+    final currentList = selectedAlumns.value;
+    currentList.removeWhere((a) => a.id == alumn.id);
+    selectedAlumns.value = [...currentList];
+  }
+
+  // --- Lógica de Guardado ---
+
+  Future<void> saveAssignments() async {
+    if (selectedFamily.value == null) {
+      _snack('Por favor, selecciona una familia.');
+      return;
+    }
+    if (selectedAlumns.value.isEmpty) {
+      _snack('Por favor, añade al menos un alumno.');
+      return;
     }
 
-    return AddResult(added: added, notFound: notFound, errors: errors);
+    loading.value = true;
+    int successCount = 0;
+    final List<String> errors = [];
+
+    for (final alumn in selectedAlumns.value) {
+      try {
+        await _membersApi.addMember(
+          idFamilia: selectedFamily.value!.id!,
+          idUsuario: alumn.id,
+          tipoMiembro: MemberTypes.hijo, // 'HIJO'
+        );
+        successCount++;
+      } catch (e) {
+        errors.add(
+          '${alumn.nombre}: ${e.toString().replaceFirst("Exception: ", "")}',
+        );
+      }
+    }
+
+    loading.value = false;
+
+    if (context!.mounted) {
+      if (errors.isEmpty) {
+        _snack(
+          '$successCount alumno(s) asignado(s) con éxito.',
+          isError: false,
+        );
+        Navigator.pop(context!, true);
+      } else {
+        _snack(
+          'Se asignaron $successCount alumno(s). Errores: ${errors.join(", ")}',
+        );
+      }
+    }
   }
 
-  void goToAddAlumnsPage() {
-    Navigator.pushNamed(context!, 'add_alumns');
+  void _snack(String msg, {bool isError = true}) {
+    if (context?.mounted ?? false) {
+      ScaffoldMessenger.of(context!).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: isError ? Colors.red : Colors.green,
+        ),
+      );
+    }
   }
-
-  void goToAdminPage() {
-    Navigator.pop(context!);
-  }
-}
-
-class AddResult {
-  final List<String> added;
-  final List<String> notFound;
-  final List<String> errors;
-
-  AddResult({
-    required this.added,
-    required this.notFound,
-    required this.errors,
-  });
 }

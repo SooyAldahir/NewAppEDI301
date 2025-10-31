@@ -141,6 +141,7 @@ class AddFamilyController {
       final isInternal = _internalResidence.value;
       final direccion = isInternal ? null : addressCtrl.text.trim();
 
+      // Validaciones (se mantienen)
       if (!isInternal && (direccion == null || direccion.isEmpty)) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -162,16 +163,22 @@ class AddFamilyController {
         return;
       }
 
-      // 1) Crear familia ENVIANDO papa_id, mama_id, residencia y (si aplica) direccion
+      // 1. Recolectar todos los IDs
+      final hijosIds = children.value.map((kid) => kid.id).toList();
+
+      // 2. Llamar al nuevo endpoint del backend que hace todo
       final created = await _familiaApi.createFamily(
         nombreFamilia: _familyName.value.trim().isEmpty
             ? 'Familia'
             : _familyName.value.trim(),
         residencia: isInternal ? 'INTERNA' : 'EXTERNA',
         direccion: direccion,
-        papaId: _pickedFather?.id, // << AQUI mandamos los IDs
-        mamaId: _pickedMother?.id, // << AQUI mandamos los IDs
+        papaId: _pickedFather?.id,
+        mamaId: _pickedMother?.id,
+        hijos: hijosIds, // <-- ENVIAMOS LOS HIJOS AQUÍ
       );
+
+      // Agregamos los nombres localmente para mostrar en la UI, ya que el backend no los devuelve en este punto
       final withNames = created.copyWith(
         fatherName: _pickedFather == null
             ? null
@@ -181,41 +188,18 @@ class AddFamilyController {
             : '${_pickedMother!.nombre} ${_pickedMother!.apellido}'.trim(),
       );
 
-      // 2) Registrar miembros (si tu endpoint createFamily no vincula padres/hijos)
-      if (_pickedFather != null) {
-        await _membersApi.addMember(
-          idFamilia: created.id!,
-          idUsuario: _pickedFather!.id,
-          tipoMiembro: MemberTypes.padre, // PADRE
-        );
-      }
-      if (_pickedMother != null) {
-        await _membersApi.addMember(
-          idFamilia: created.id!,
-          idUsuario: _pickedMother!.id,
-          tipoMiembro: MemberTypes.madre, // MADRE
-        );
-      }
-      for (final kid in children.value) {
-        await _membersApi.addMember(
-          idFamilia: created.id!,
-          idUsuario: kid.id,
-          tipoMiembro: MemberTypes.hijo, // HIJO
-        );
-      }
-
-      // 3) Actualiza lista local + feedback
+      // 3. Actualiza lista local + feedback
       final list = [...AddFamilyController.familyList.value]..add(withNames);
       AddFamilyController.familyList.value = list;
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Familia creada con éxito')),
+          const SnackBar(content: Text('Familia y miembros creados con éxito')),
         );
         Navigator.of(context).pop(true);
       }
 
-      // Limpieza
+      // Limpieza de campos (se mantiene)
       _pickedFather = null;
       _pickedMother = null;
       fatherCtrl.clear();
@@ -227,6 +211,16 @@ class AddFamilyController {
       fatherResults.value = [];
       motherResults.value = [];
       childResults.value = [];
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error al guardar: ${e.toString().replaceFirst('Exception: ', '')}',
+            ),
+          ),
+        );
+      }
     } finally {
       _loading.value = false;
     }

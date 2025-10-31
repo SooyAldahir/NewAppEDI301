@@ -47,4 +47,20 @@ class MembersApi {
       throw Exception(msg);
     }
   }
+
+  Future<Map<String, dynamic>> addAlumnsToFamily(
+    int familyId,
+    List<String> matriculas,
+  ) async {
+    final res = await _http.postJson(
+      '/api/miembros/familia/$familyId/alumnos',
+      data: {'matriculas': matriculas},
+    );
+
+    if (res.statusCode >= 400) {
+      throw Exception('Error al agregar alumnos: ${res.body}');
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
 }

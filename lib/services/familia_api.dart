@@ -17,9 +17,10 @@ class FamiliaApi {
   Future<Family> createFamily({
     required String nombreFamilia,
     required String residencia, // 'INTERNA' | 'EXTERNA'
-    String? direccion, // requerido si EXTERNA
-    int? papaId, // << NUEVO (usa snake_case de tu tabla)
-    int? mamaId, // << NUEVO
+    String? direccion,
+    int? papaId,
+    int? mamaId,
+    List<int>? hijos, // <-- NUEVO PARÁMETRO
   }) async {
     final payload = <String, dynamic>{
       'nombre_familia': nombreFamilia,
@@ -28,11 +29,19 @@ class FamiliaApi {
         'direccion': direccion.trim(),
       if (papaId != null) 'papa_id': papaId,
       if (mamaId != null) 'mama_id': mamaId,
+      if (hijos != null && hijos.isNotEmpty) 'hijos': hijos, // <-- NUEVO CAMPO
     };
 
     final res = await _http.postJson('/api/familias', data: payload);
     debugPrint('POST /api/familias -> ${res.statusCode} :: ${res.body}');
     if (res.statusCode >= 400) {
+      // Intenta decodificar el error del backend para un mensaje más claro
+      try {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map && decoded.containsKey('error')) {
+          throw Exception(decoded['error']);
+        }
+      } catch (_) {}
       throw Exception('Error ${res.statusCode}: ${res.body}');
     }
 

@@ -44,16 +44,28 @@ class Family {
       final up = s.toUpperCase();
       if (up.startsWith('INT')) return 'Interna';
       if (up.startsWith('EXT')) return 'Externa';
-      return s; // deja tal cual si viene otro valor
+      return s;
     }
+
+    // --- LÓGICA NUEVA PARA PROCESAR MIEMBROS ---
+    final List<String> householdChildren = [];
+    if (j['miembros'] is List) {
+      for (final miembro in (j['miembros'] as List)) {
+        if (miembro is Map<String, dynamic> &&
+            miembro['tipo_miembro'] == 'HIJO') {
+          final nombre = miembro['nombre'] ?? '';
+          final apellido = miembro['apellido'] ?? '';
+          householdChildren.add('$nombre $apellido'.trim());
+        }
+      }
+    }
+    // --- FIN DE LÓGICA NUEVA ---
 
     return Family(
       id: (j['id_familia'] ?? j['FamiliaID'] ?? j['id']) as int?,
       familyName:
           (j['nombre_familia'] ?? j['Nombre_Familia'] ?? j['nombre'] ?? '')
               .toString(),
-
-      // 👇 ahora tomamos los nombres del JOIN si existen
       fatherName:
           (j['papa_nombre'] ??
                   j['Padre'] ??
@@ -68,16 +80,13 @@ class Family {
                   j['motherName'] ??
                   j['nombre_madre'])
               ?.toString(),
-
-      // residencia y dirección
       residencia: _normalizeRes(j['residencia'] ?? j['Residencia']),
       direccion: (j['direccion'] ?? j['Direccion'])?.toString(),
 
-      // listas locales (UI)
-      assignedStudents: const [],
-      householdChildren: const [],
+      // Usa la nueva lista que acabamos de crear
+      householdChildren: householdChildren,
+      assignedStudents: const [], // Mantenemos esta como estaba por ahora
 
-      // ids de empleados (por compatibilidad con distintas claves)
       fatherEmployeeId:
           (j['papa_id'] ??
                   j['Papa_id'] ??

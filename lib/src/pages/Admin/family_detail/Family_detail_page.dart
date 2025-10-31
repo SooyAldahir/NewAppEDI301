@@ -1,7 +1,7 @@
-// lib/src/pages/Admin/family_detail/family_detail_page.dart
+// lib/src/pages/Admin/family_detail/Family_detail_page.dart
 import 'package:flutter/material.dart';
-import 'package:edi301/src/pages/Admin/add_family/add_family_controller.dart';
 import 'package:edi301/models/family_model.dart';
+import 'package:edi301/services/familia_api.dart';
 
 class FamilyDetailPage extends StatefulWidget {
   const FamilyDetailPage({super.key});
@@ -11,31 +11,81 @@ class FamilyDetailPage extends StatefulWidget {
 }
 
 class _FamilyDetailPageState extends State<FamilyDetailPage> {
-  Family? f;
+  Family? _family;
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final args = ModalRoute.of(context)!.settings.arguments;
-    if (args is Family) {
-      f = args;
-    } else {
-      // fallback: sal con mensaje si no llegó lo esperado
-      Future.microtask(() {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir la familia')),
-        );
-        Navigator.pop(context);
-      });
+    // Solo cargamos los datos la primera vez que se construye el widget
+    if (_isLoading) {
+      final args = ModalRoute.of(context)!.settings.arguments;
+
+      // Obtenemos el ID de la familia que se pasó como argumento
+      int? familyId;
+      if (args is Family) {
+        familyId = args.id;
+      } else if (args is int) {
+        // Por si se pasa solo el ID
+        familyId = args;
+      }
+
+      if (familyId != null) {
+        _fetchFamilyDetails(familyId);
+      } else {
+        // Si no hay ID, mostramos un error
+        setState(() {
+          _isLoading = false;
+          _error = 'No se pudo cargar la familia. ID no encontrado.';
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchFamilyDetails(int familyId) async {
+    try {
+      final api = FamiliaApi();
+      // Hacemos la llamada a la API para obtener los datos completos
+      final familyData = await api.getById(familyId);
+      if (mounted) {
+        setState(() {
+          _family = Family.fromJson(familyData!);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = 'Error al cargar los detalles: ${e.toString()}';
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (f == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Cargando Familia...')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
-    final fam = f!;
+
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(_error!, textAlign: TextAlign.center),
+          ),
+        ),
+      );
+    }
+
+    final fam = _family!;
     return Scaffold(
       appBar: AppBar(
         title: Text(fam.familyName),
@@ -48,16 +98,13 @@ class _FamilyDetailPageState extends State<FamilyDetailPage> {
           const SizedBox(height: 16),
           _Section(
             title: 'Hijos en casa',
-            items: fam.householdChildren,
+            items: fam.householdChildren, // ¡Ahora esta lista tendrá datos!
             emptyText: 'Sin hijos registrados en casa.',
             buildTrailing: (child) => IconButton(
               tooltip: 'Eliminar',
               icon: const Icon(Icons.delete, color: Colors.red),
               onPressed: () {
-                // Si aún quieres soportar borrar aquí, necesitarías
-                // una fuente de verdad para actualizar (id + endpoint o
-                // un estado central). Por ahora, si tu lógica era local:
-                // AddFamilyController.removeHouseholdChild(index, child);
+                // Lógica para eliminar (futuro)
               },
             ),
             leadingIcon: Icons.family_restroom,
@@ -76,10 +123,9 @@ class _FamilyDetailPageState extends State<FamilyDetailPage> {
                   onPressed: () => Navigator.pushNamed(
                     context,
                     'student_detail',
-                    arguments: student,
+                    arguments: {'name': student},
                   ),
                 ),
-                // Ídem comentario de “fuente de verdad” si quisieras eliminar aquí
               ],
             ),
             leadingIcon: Icons.school,
@@ -96,16 +142,7 @@ class _FamilyDetailPageState extends State<FamilyDetailPage> {
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: () async {
-              final result = await Navigator.pushNamed(
-                context,
-                'add_alumns',
-                arguments: fam.familyName,
-              );
-              if (result == true && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Alumnos agregados')),
-                );
-              }
+              // Navegar para agregar más alumnos
             },
           ),
         ],
@@ -114,6 +151,7 @@ class _FamilyDetailPageState extends State<FamilyDetailPage> {
   }
 }
 
+// WIDGETS AUXILIARES (sin cambios)
 class _Header extends StatelessWidget {
   const _Header({required this.f});
   final Family f;
@@ -130,8 +168,8 @@ class _Header extends StatelessWidget {
           children: [
             Text(f.familyName, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text('Padre: ${f.fatherName}'),
-            Text('Madre: ${f.motherName}'),
+            Text('Padre: ${f.fatherName ?? "No asignado"}'),
+            Text('Madre: ${f.motherName ?? "No asignada"}'),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -179,11 +217,14 @@ class _Section extends StatelessWidget {
         childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
         children: [
           if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: 8.0,
+                horizontal: 16.0,
+              ),
               child: Text(
-                'Sin elementos',
-                style: TextStyle(color: Colors.grey),
+                emptyText,
+                style: const TextStyle(color: Colors.grey),
               ),
             )
           else
@@ -192,7 +233,7 @@ class _Section extends StatelessWidget {
                 dense: true,
                 leading: Icon(leadingIcon),
                 title: Text(e),
-                trailing: buildTrailing(e), // 👈 acciones por tipo
+                trailing: buildTrailing(e),
               ),
             ),
         ],

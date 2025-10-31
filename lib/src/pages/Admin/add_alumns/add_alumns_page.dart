@@ -1,8 +1,8 @@
-import 'package:edi301/src/pages/Admin/add_alumns/add_alumns_controller.dart';
-import 'package:edi301/src/pages/Admin/add_family/add_family_controller.dart';
-import 'package:edi301/models/family_model.dart';
+// lib/src/pages/Admin/add_alumns/add_alumns_page.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+import 'package:edi301/models/family_model.dart';
+import 'package:edi301/services/search_api.dart';
+import 'add_alumns_controller.dart';
 
 class AddAlumnsPage extends StatefulWidget {
   const AddAlumnsPage({super.key});
@@ -12,62 +12,19 @@ class AddAlumnsPage extends StatefulWidget {
 }
 
 class _AddAlumnsPageState extends State<AddAlumnsPage> {
-  late final AddAlumnsController _controller;
-
-  // Buscador/selección de familia
-  final TextEditingController searchFamilyCtrl = TextEditingController();
-  Family? _selectedFamily; // << ahora guardamos el objeto (con id)
-  bool _lockedFamily = false;
-
-  // Matrículas dinámicas
-  final List<TextEditingController> studentCtrls = [];
-  final List<Widget> alumnFields = [];
+  final _controller = AddAlumnsController();
+  Key _alumnAutocompleteKey = UniqueKey();
 
   @override
   void initState() {
     super.initState();
-    _controller = AddAlumnsController();
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      _controller.init(context);
-      // lee argumento opcional; puede venir el nombre de familia
-      final args = ModalRoute.of(context)!.settings.arguments;
-      if (args is String && args.isNotEmpty) {
-        // intenta resolver el objeto Family por nombre
-        final fam = _resolveFamilyByName(args);
-        if (fam != null) {
-          setState(() {
-            _selectedFamily = fam;
-            searchFamilyCtrl.text = fam.familyName;
-            _lockedFamily = true; // bloquear edición si vino preseleccionada
-          });
-        } else {
-          // si no se encontró, al menos bloqueamos el texto que vino
-          setState(() {
-            searchFamilyCtrl.text = args;
-            _lockedFamily = false;
-          });
-        }
-      }
-    });
+    _controller.init(context);
   }
 
   @override
   void dispose() {
-    searchFamilyCtrl.dispose();
-    for (final c in studentCtrls) {
-      c.dispose();
-    }
+    _controller.dispose();
     super.dispose();
-  }
-
-  List<Family> get allFamilies => AddFamilyController.familyList.value;
-
-  Family? _resolveFamilyByName(String name) {
-    final low = name.trim().toLowerCase();
-    return allFamilies.firstWhere(
-      (f) => f.familyName.trim().toLowerCase() == low,
-      orElse: () => null as Family,
-    );
   }
 
   @override
@@ -76,271 +33,198 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Añadir alumnos a familia'),
+        title: const Text('Asignar Alumnos a Familia'),
         backgroundColor: primary,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _familyAutocomplete(),
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: Text(
-                'Ingresa la matrícula de los alumnos:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildFamilySelector(),
+              const SizedBox(height: 30),
+              const Text(
+                'Buscar y Añadir Alumnos',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
-            ),
-            ...alumnFields,
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: IconButton(
-                icon: const Icon(
-                  Icons.add_circle,
-                  size: 40,
-                  color: Colors.amber,
-                ),
-                onPressed: _addStudentField,
-              ),
-            ),
-            _buttonSave(),
-          ],
+              const SizedBox(height: 10),
+              _buildAlumnSelector(),
+              const SizedBox(height: 20),
+              _buildSelectedAlumnsList(),
+              const SizedBox(height: 40),
+              _buildSaveButton(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ================== UI ==================
-
-  Widget _familyAutocomplete() {
-    if (_lockedFamily) {
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 25),
-        child: TextField(
-          controller: searchFamilyCtrl,
-          readOnly: true,
-          decoration: InputDecoration(
-            labelText: 'Familia seleccionada',
-            suffixIcon: const Icon(Icons.lock),
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: const BorderSide(
-                color: Color.fromRGBO(245, 188, 6, 1),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 25),
-      child: Autocomplete<Family>(
-        optionsBuilder: (TextEditingValue text) {
-          final q = text.text.trim().toLowerCase();
-          if (q.isEmpty) return const Iterable<Family>.empty();
-          return allFamilies.where(
-            (f) => f.familyName.toLowerCase().contains(q),
-          );
-        },
-        displayStringForOption: (Family f) => f.familyName,
-        onSelected: (Family f) {
-          setState(() {
-            _selectedFamily = f;
-            searchFamilyCtrl.text = f.familyName;
-          });
-        },
-        fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-          textController.text = searchFamilyCtrl.text;
-          textController.addListener(() {
-            searchFamilyCtrl.text = textController.text;
-            // si el texto ya no coincide con la familia seleccionada, la des-seleccionamos
-            if (_selectedFamily != null &&
-                _selectedFamily!.familyName.toLowerCase() !=
-                    textController.text.toLowerCase()) {
-              _selectedFamily = null;
+  Widget _buildFamilySelector() {
+    return ValueListenableBuilder<Family?>(
+      valueListenable: _controller.selectedFamily,
+      builder: (context, selectedFamily, child) {
+        return Autocomplete<Family>(
+          displayStringForOption: (family) => family.familyName,
+          optionsBuilder: (textEditingValue) {
+            if (selectedFamily != null) {
+              return const Iterable<Family>.empty();
             }
-          });
-
-          return TextField(
-            controller: textController,
-            focusNode: focusNode,
-            decoration: InputDecoration(
-              hintText: 'Buscar familia',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(30),
-                borderSide: const BorderSide(
-                  color: Color.fromRGBO(245, 188, 6, 1),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(30),
-                borderSide: const BorderSide(
-                  color: Color.fromRGBO(245, 188, 6, 1),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(30),
-                borderSide: const BorderSide(
-                  color: Color.fromRGBO(245, 188, 6, 1),
-                  width: 2,
-                ),
-              ),
-              contentPadding: const EdgeInsets.all(15),
-              suffixIcon: const Icon(
-                Icons.search,
-                color: Color.fromRGBO(19, 67, 107, 1),
-              ),
-            ),
-          );
-        },
-        optionsViewBuilder: (context, onSelected, options) {
-          final opts = options.toList();
-          return Align(
-            alignment: Alignment.topLeft,
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(12),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxHeight: 240,
-                  maxWidth: 600,
-                ),
-                child: ListView.separated(
-                  padding: EdgeInsets.zero,
-                  itemCount: opts.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final f = opts[index];
-                    return ListTile(
-                      title: Text(f.familyName),
-                      subtitle: Text(
-                        'Padre: ${f.fatherName} • Madre: ${f.motherName}',
+            return _controller.searchFamilies(textEditingValue.text);
+          },
+          onSelected: (family) {
+            _controller.selectFamily(family);
+            FocusScope.of(context).unfocus();
+          },
+          fieldViewBuilder:
+              (context, textEditingController, focusNode, onFieldSubmitted) {
+                if (selectedFamily != null) {
+                  textEditingController.text = selectedFamily.familyName;
+                  return TextField(
+                    controller: textEditingController,
+                    focusNode: focusNode,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'Familia Seleccionada',
+                      filled: true,
+                      fillColor: Colors.grey[200],
+                      prefixIcon: const Icon(Icons.family_restroom),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      onTap: () => onSelected(f),
-                    );
-                  },
+                      suffixIcon: IconButton(
+                        tooltip: 'Cambiar familia',
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _controller.clearFamily();
+                          textEditingController.clear();
+                        },
+                      ),
+                    ),
+                  );
+                } else {
+                  return TextField(
+                    controller: textEditingController,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      labelText: '1. Buscar familia por nombre',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  );
+                }
+              },
+        );
+      },
+    );
+  }
+
+  Widget _buildAlumnSelector() {
+    return Autocomplete<UserMini>(
+      key: _alumnAutocompleteKey,
+      displayStringForOption: (alumn) =>
+          '${alumn.nombre} ${alumn.apellido} (${alumn.matricula ?? 'N/A'})',
+      optionsBuilder: (textEditingValue) {
+        return _controller.searchAlumns(textEditingValue.text);
+      },
+      // --- INICIO DE LA SOLUCIÓN DEFINITIVA ---
+      onSelected: (alumn) {
+        // 1. Añade el alumno a la lista de datos.
+        _controller.addAlumn(alumn);
+
+        // 2. Quita el foco del TextField de inmediato.
+        FocusScope.of(context).unfocus();
+
+        // 3. Usamos Future.microtask para posponer la reconstrucción del widget.
+        //    Esto le da tiempo al sistema para procesar la pérdida de foco
+        //    antes de que intentemos destruir el widget.
+        Future.microtask(() {
+          setState(() {
+            _alumnAutocompleteKey = UniqueKey();
+          });
+        });
+      },
+      // --- FIN DE LA SOLUCIÓN DEFINITIVA ---
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onFieldSubmitted) {
+            return TextField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                labelText: '2. Buscar alumno por matrícula o nombre',
+                prefixIcon: const Icon(Icons.person_search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
+              ),
+            );
+          },
+    );
+  }
+
+  Widget _buildSelectedAlumnsList() {
+    return ValueListenableBuilder<List<UserMini>>(
+      valueListenable: _controller.selectedAlumns,
+      builder: (context, alumns, child) {
+        if (alumns.isEmpty) {
+          return const Center(
+            child: Text(
+              'Ningún alumno añadido todavía.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          );
+        }
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: alumns
+              .map(
+                (alumn) => Chip(
+                  label: Text('${alumn.nombre} ${alumn.apellido}'),
+                  avatar: const Icon(Icons.school),
+                  onDeleted: () => _controller.removeAlumn(alumn),
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _controller.loading,
+        builder: (context, isLoading, child) {
+          return ElevatedButton.icon(
+            icon: isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.save),
+            label: Text(isLoading ? 'GUARDANDO...' : 'GUARDAR ASIGNACIONES'),
+            onPressed: isLoading ? null : _controller.saveAssignments,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromRGBO(19, 67, 107, 1),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
           );
         },
       ),
-    );
-  }
-
-  void _addStudentField() {
-    setState(() {
-      final ctrl = TextEditingController();
-      studentCtrls.add(ctrl);
-      final index = studentCtrls.length - 1;
-      alumnFields.add(_buildAlumnField(index, ctrl));
-    });
-  }
-
-  Widget _buildAlumnField(int index, TextEditingController ctrl) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: ctrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                hintText: 'Matrícula del alumno ${index + 1}',
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: () {
-              setState(() {
-                final i = studentCtrls.indexOf(ctrl);
-                if (i != -1) {
-                  studentCtrls.removeAt(i);
-                  alumnFields.removeAt(i);
-                }
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buttonSave() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: _controller.loading,
-      builder: (_, isLoading, __) => Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        child: ElevatedButton(
-          onPressed: isLoading ? null : _onSave,
-          style: ElevatedButton.styleFrom(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30),
-            ),
-            backgroundColor: const Color.fromRGBO(245, 188, 6, 1),
-            padding: const EdgeInsets.symmetric(vertical: 15),
-          ),
-          child: Text(
-            isLoading ? 'Guardando...' : 'GUARDAR',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ================== LÓGICA ==================
-
-  Future<void> _onSave() async {
-    final fam = _selectedFamily ?? _resolveFamilyByName(searchFamilyCtrl.text);
-    if (fam == null) {
-      _snack('Selecciona una familia válida');
-      return;
-    }
-
-    final students = studentCtrls
-        .map((c) => c.text.trim())
-        .where((t) => t.isNotEmpty)
-        .toList();
-
-    if (students.isEmpty) {
-      _snack('Agrega al menos una matrícula');
-      return;
-    }
-
-    final result = await _controller.addAlumnsToFamily(
-      familyId: fam.id ?? 0, // usa el campo que tengas en tu model
-      matriculas: students,
-    );
-
-    if (result.added.isNotEmpty) {
-      _snack('Agregados: ${result.added.join(', ')}');
-    }
-    if (result.notFound.isNotEmpty || result.errors.isNotEmpty) {
-      _snack(
-        'No encontrados: ${result.notFound.join(', ')}. '
-        'Errores: ${result.errors.join(', ')}',
-      );
-    }
-
-    if (result.added.isNotEmpty) {
-      if (mounted) {
-        Navigator.pop(context, true); // vuelve al detalle y refresca
-      }
-    }
-  }
-
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
     );
   }
 }
