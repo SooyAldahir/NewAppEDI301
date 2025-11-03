@@ -13,7 +13,9 @@ class AddAlumnsPage extends StatefulWidget {
 
 class _AddAlumnsPageState extends State<AddAlumnsPage> {
   final _controller = AddAlumnsController();
+  // Key para forzar la reconstrucción del Autocomplete de alumnos
   Key _alumnAutocompleteKey = UniqueKey();
+  final _alumnSearchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -62,6 +64,7 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
     );
   }
 
+  // Este widget ya está funcionando bien, no requiere cambios.
   Widget _buildFamilySelector() {
     return ValueListenableBuilder<Family?>(
       valueListenable: _controller.selectedFamily,
@@ -123,49 +126,76 @@ class _AddAlumnsPageState extends State<AddAlumnsPage> {
     );
   }
 
+  /// Widget con la lógica corregida para evitar el crash.
   Widget _buildAlumnSelector() {
-    return Autocomplete<UserMini>(
-      key: _alumnAutocompleteKey,
-      displayStringForOption: (alumn) =>
-          '${alumn.nombre} ${alumn.apellido} (${alumn.matricula ?? 'N/A'})',
-      optionsBuilder: (textEditingValue) {
-        return _controller.searchAlumns(textEditingValue.text);
-      },
-      // --- INICIO DE LA SOLUCIÓN DEFINITIVA ---
-      onSelected: (alumn) {
-        // 1. Añade el alumno a la lista de datos.
-        _controller.addAlumn(alumn);
+    return Column(
+      children: [
+        // 1. El campo de texto para buscar
+        TextField(
+          controller: _alumnSearchCtrl,
+          decoration: InputDecoration(
+            labelText: '2. Buscar alumno por matrícula o nombre',
+            prefixIcon: const Icon(Icons.person_search),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onChanged: (value) {
+            // Llama al controlador para que busque
+            _controller.searchAlumns(value);
+          },
+        ),
+        const SizedBox(height: 8),
 
-        // 2. Quita el foco del TextField de inmediato.
-        FocusScope.of(context).unfocus();
-
-        // 3. Usamos Future.microtask para posponer la reconstrucción del widget.
-        //    Esto le da tiempo al sistema para procesar la pérdida de foco
-        //    antes de que intentemos destruir el widget.
-        Future.microtask(() {
-          setState(() {
-            _alumnAutocompleteKey = UniqueKey();
-          });
-        });
-      },
-      // --- FIN DE LA SOLUCIÓN DEFINITIVA ---
-      fieldViewBuilder:
-          (context, textEditingController, focusNode, onFieldSubmitted) {
-            return TextField(
-              controller: textEditingController,
-              focusNode: focusNode,
-              decoration: InputDecoration(
-                labelText: '2. Buscar alumno por matrícula o nombre',
-                prefixIcon: const Icon(Icons.person_search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+        // 2. La lista de resultados que aparece debajo
+        ValueListenableBuilder<List<UserMini>>(
+          valueListenable: _controller.alumnSearchResults,
+          builder: (context, results, child) {
+            if (results.isEmpty) {
+              return const SizedBox.shrink(); // No mostrar nada si no hay resultados
+            }
+            // Limita la altura de la lista de resultados
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: Card(
+                elevation: 2,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: results.length,
+                  itemBuilder: (context, index) {
+                    final alumn = results[index];
+                    return ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.school)),
+                      title: Text('${alumn.nombre} ${alumn.apellido}'),
+                      subtitle: Text('Matrícula: ${alumn.matricula ?? 'N/A'}'),
+                      trailing: IconButton(
+                        icon: const Icon(
+                          Icons.add_circle_outline,
+                          color: Colors.green,
+                        ),
+                        tooltip: 'Añadir alumno',
+                        onPressed: () {
+                          // Al hacer clic aquí...
+                          _controller.addAlumn(
+                            alumn,
+                          ); // ...se añade a los Chips...
+                          _alumnSearchCtrl
+                              .clear(); // ...se limpia el campo de texto...
+                          FocusScope.of(
+                            context,
+                          ).unfocus(); // ...y se oculta el teclado.
+                        },
+                      ),
+                    );
+                  },
                 ),
               ),
             );
           },
+        ),
+      ],
     );
   }
 
+  // El resto de los widgets no necesitan cambios
   Widget _buildSelectedAlumnsList() {
     return ValueListenableBuilder<List<UserMini>>(
       valueListenable: _controller.selectedAlumns,

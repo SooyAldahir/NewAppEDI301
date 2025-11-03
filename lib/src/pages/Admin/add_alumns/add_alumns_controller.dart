@@ -16,6 +16,8 @@ class AddAlumnsController {
   final ValueNotifier<Family?> selectedFamily = ValueNotifier(null);
   final ValueNotifier<List<UserMini>> selectedAlumns = ValueNotifier([]);
 
+  final ValueNotifier<List<UserMini>> alumnSearchResults = ValueNotifier([]);
+
   void init(BuildContext context) {
     this.context = context;
   }
@@ -24,6 +26,7 @@ class AddAlumnsController {
     loading.dispose();
     selectedFamily.dispose();
     selectedAlumns.dispose();
+    alumnSearchResults.dispose();
   }
 
   // --- Lógica de Búsqueda ---
@@ -44,14 +47,20 @@ class AddAlumnsController {
   }
 
   /// Busca alumnos por matrícula o nombre para el autocompletado.
-  Future<List<UserMini>> searchAlumns(String query) async {
-    if (query.trim().isEmpty) return [];
+  Future<void> searchAlumns(String query) async {
+    if (query.trim().isEmpty) {
+      alumnSearchResults.value = [];
+      return;
+    }
     try {
       final result = await _searchApi.searchAll(query);
-      return result.alumnos;
+      final currentIds = selectedAlumns.value.map((a) => a.id).toSet();
+      alumnSearchResults.value = result.alumnos
+          .where((a) => !currentIds.contains(a.id))
+          .toList();
     } catch (e) {
       debugPrint('Error buscando alumnos: $e');
-      return [];
+      alumnSearchResults.value = [];
     }
   }
 
@@ -67,10 +76,10 @@ class AddAlumnsController {
 
   void addAlumn(UserMini alumn) {
     final currentList = selectedAlumns.value;
-    // Evitar duplicados
     if (!currentList.any((a) => a.id == alumn.id)) {
       selectedAlumns.value = [...currentList, alumn];
     }
+    alumnSearchResults.value = [];
   }
 
   void removeAlumn(UserMini alumn) {
@@ -82,6 +91,7 @@ class AddAlumnsController {
   // --- Lógica de Guardado ---
 
   Future<void> saveAssignments() async {
+    // 1. Validaciones
     if (selectedFamily.value == null) {
       _snack('Por favor, selecciona una familia.');
       return;
@@ -92,38 +102,33 @@ class AddAlumnsController {
     }
 
     loading.value = true;
-    int successCount = 0;
-    final List<String> errors = [];
 
-    for (final alumn in selectedAlumns.value) {
-      try {
-        await _membersApi.addMember(
-          idFamilia: selectedFamily.value!.id!,
-          idUsuario: alumn.id,
-          tipoMiembro: MemberTypes.hijo, // 'HIJO'
-        );
-        successCount++;
-      } catch (e) {
-        errors.add(
-          '${alumn.nombre}: ${e.toString().replaceFirst("Exception: ", "")}',
-        );
-      }
-    }
+    try {
+      // 2. Preparar los datos
+      final familyId = selectedFamily.value!.id!;
+      final alumnIds = selectedAlumns.value.map((alumn) => alumn.id).toList();
 
-    loading.value = false;
+      // 3. Llamar a la API "bulk" UNA SOLA VEZ
+      await _membersApi.addMembersBulk(
+        idFamilia: familyId,
+        idUsuarios: alumnIds,
+      );
 
-    if (context!.mounted) {
-      if (errors.isEmpty) {
+      loading.value = false;
+
+      // 4. Éxito
+      if (context!.mounted) {
         _snack(
-          '$successCount alumno(s) asignado(s) con éxito.',
+          '${alumnIds.length} alumno(s) asignado(s) con éxito.',
           isError: false,
         );
         Navigator.pop(context!, true);
-      } else {
-        _snack(
-          'Se asignaron $successCount alumno(s). Errores: ${errors.join(", ")}',
-        );
       }
+    } catch (e) {
+      // 5. Manejar el error de la API
+      loading.value = false;
+      // Esto te mostrará el error exacto del backend (si lo hay)
+      _snack(e.toString().replaceFirst("Exception: ", ""));
     }
   }
 
