@@ -1,5 +1,6 @@
 import 'dart:async'; // <--- 1. Importar para 'mounted'
 import 'dart:convert';
+import 'package:edi301/src/theme_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:edi301/core/api_client_http.dart';
@@ -46,6 +47,22 @@ class _PerfilPageState extends State<PerfilPage> {
   void initState() {
     super.initState();
     _loadProfile(); // hidrata desde local y servidor
+    themeNotifier.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    // --- 4. QUITA EL OYENTE ---
+    themeNotifier.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) {
+      setState(() {
+        // Solo para forzar un redibujo y actualizar el switch
+      });
+    }
   }
 
   // 1) Lee 'user' de SharedPreferences y mapea a tu UI
@@ -265,6 +282,7 @@ class _PerfilPageState extends State<PerfilPage> {
 
   Widget _buildContent(BuildContext context) {
     final p = primary;
+    final isDarkMode = themeNotifier.value == ThemeMode.dark;
 
     return Center(
       child: ConstrainedBox(
@@ -336,11 +354,15 @@ class _PerfilPageState extends State<PerfilPage> {
             SettingsCard(
               primary: p,
               notif: notif,
-              darkMode: darkMode,
+              darkMode: isDarkMode,
               showAvatar: showAvatar,
               bgRefresh: bgRefresh,
               birthdayReminder: birthdayReminder,
               onChanged: (k, v) => setState(() {
+                if (k == 'dark') {
+                  // Llama al servicio para cambiar el tema
+                  setTheme(v ? ThemeMode.dark : ThemeMode.light);
+                }
                 switch (k) {
                   case 'notif':
                     notif = v;

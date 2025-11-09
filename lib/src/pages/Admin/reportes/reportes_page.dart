@@ -206,7 +206,7 @@ class _ReportesPageState extends State<ReportesPage> {
                   )
                 : IconButton(
                     icon: const Icon(
-                      Icons.picture_as_pdf,
+                      Icons.download,
                       color: Colors.black54,
                       size: 30,
                     ),
