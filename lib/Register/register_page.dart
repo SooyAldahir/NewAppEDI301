@@ -11,13 +11,6 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final RegisterController _controller = RegisterController();
-  int _currentStep = 0; // Controla el paso actual
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _verificationCodeController =
-      TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
 
   @override
   void initState() {
@@ -28,175 +21,218 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    const primaryColor = Color.fromRGBO(19, 67, 107, 1);
+    const accentColor = Color.fromRGBO(245, 188, 6, 1);
+
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(19, 67, 107, 1),
+      backgroundColor: primaryColor,
+      appBar: AppBar(
+        title: const Text('Crear Cuenta'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _controller.goToLoginPage,
+        ),
+      ),
       body: SingleChildScrollView(
         child: SizedBox(
           width: double.infinity,
-          child: Column(
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(left: 40, right: 40, top: 100),
-                child: Image(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Column(
+              children: [
+                const Image(
                   image: AssetImage('assets/img/logo_edi.png'),
-                  width: 225,
-                  height: 225,
+                  width: 150,
+                  height: 150,
                 ),
-              ),
-              if (_currentStep == 0) _textFieldEmail(),
-              if (_currentStep == 1) _textFieldVerificationCode(),
-              if (_currentStep == 2) _textFieldPassword(),
-              if (_currentStep == 2) _textFieldConfirmPassword(),
-              _buttonAction(),
-            ],
+                const SizedBox(height: 20),
+
+                // Selector de Tipo de Usuario
+                _buildUserTypeSelector(accentColor),
+                const SizedBox(height: 10),
+
+                // Campos comunes
+                _textField(
+                  controller: _controller.nombreCtrl,
+                  hint: 'Nombre(s)',
+                  icon: Icons.person_outline,
+                ),
+                _textField(
+                  controller: _controller.apellidoCtrl,
+                  hint: 'Apellidos',
+                  icon: Icons.person_outline,
+                ),
+                _textField(
+                  controller: _controller.emailCtrl,
+                  hint: 'Correo institucional (@ulv.edu.mx)',
+                  icon: Icons.mail_outline,
+                  keyboard: TextInputType.emailAddress,
+                ),
+
+                // Campos condicionales (Matrícula / Num. Empleado)
+                ValueListenableBuilder<String>(
+                  valueListenable: _controller.tipoUsuario,
+                  builder: (context, tipo, child) {
+                    if (tipo == 'ALUMNO') {
+                      return _textField(
+                        controller: _controller.matriculaCtrl,
+                        hint: 'Matrícula',
+                        icon: Icons.school_outlined,
+                        keyboard: TextInputType.number,
+                      );
+                    } else {
+                      return _textField(
+                        controller: _controller.numEmpleadoCtrl,
+                        hint: 'Número de Empleado',
+                        icon: Icons.work_outline,
+                        keyboard: TextInputType.number,
+                      );
+                    }
+                  },
+                ),
+
+                // Contraseñas
+                _textField(
+                  controller: _controller.passCtrl,
+                  hint: 'Contraseña',
+                  icon: Icons.key_outlined,
+                  obscure: true,
+                ),
+                _textField(
+                  controller: _controller.confirmPassCtrl,
+                  hint: 'Confirmar contraseña',
+                  icon: Icons.key_outlined,
+                  obscure: true,
+                ),
+
+                _buttonAction(accentColor),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _textFieldEmail() {
+  // Widget para el selector Alumno/Empleado
+  Widget _buildUserTypeSelector(Color accentColor) {
+    return ValueListenableBuilder<String>(
+      valueListenable: _controller.tipoUsuario,
+      builder: (context, tipo, child) {
+        return ToggleButtons(
+          isSelected: [tipo == 'ALUMNO', tipo == 'EMPLEADO'],
+          onPressed: (index) {
+            _controller.tipoUsuario.value = index == 0 ? 'ALUMNO' : 'EMPLEADO';
+          },
+          borderRadius: BorderRadius.circular(30),
+          fillColor: accentColor.withOpacity(0.3),
+          selectedColor: accentColor,
+          color: Colors.white70,
+          borderColor: accentColor,
+          selectedBorderColor: accentColor,
+          children: const [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.school),
+                  SizedBox(width: 8),
+                  Text('Soy Alumno'),
+                ],
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.work),
+                  SizedBox(width: 8),
+                  Text('Soy Empleado'),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Widget reutilizable para campos de texto
+  Widget _textField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool obscure = false,
+    TextInputType keyboard = TextInputType.text,
+  }) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: const BoxDecoration(
         border: Border(
           bottom: BorderSide(color: Color.fromRGBO(245, 188, 6, 1), width: 2),
         ),
       ),
       child: TextField(
-        controller: _emailController,
-        decoration: const InputDecoration(
-          hintText: 'Ingrese su correo institucional',
-          hintStyle: TextStyle(color: Colors.white),
+        controller: controller,
+        obscureText: obscure,
+        keyboardType: keyboard,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.white70),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.all(15),
-          prefixIcon: Icon(Icons.person, color: Colors.white),
+          contentPadding: const EdgeInsets.all(15),
+          prefixIcon: Icon(icon, color: Colors.white),
         ),
       ),
     );
   }
 
-  Widget _textFieldVerificationCode() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Color.fromRGBO(245, 188, 6, 1), width: 2),
-        ),
-      ),
-      child: TextField(
-        controller: _verificationCodeController,
-        decoration: const InputDecoration(
-          hintText: 'Ingrese el código de verificación',
-          hintStyle: TextStyle(color: Colors.white),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.all(15),
-          prefixIcon: Icon(Icons.verified, color: Colors.white),
-        ),
-      ),
-    );
-  }
-
-  Widget _textFieldPassword() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Color.fromRGBO(245, 188, 6, 1), width: 2),
-        ),
-      ),
-      child: TextField(
-        controller: _passwordController,
-        obscureText: true,
-        decoration: const InputDecoration(
-          hintText: 'Ingrese su contraseña',
-          hintStyle: TextStyle(color: Colors.white),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.all(15),
-          prefixIcon: Icon(Icons.key, color: Colors.white),
-        ),
-      ),
-    );
-  }
-
-  Widget _textFieldConfirmPassword() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Color.fromRGBO(245, 188, 6, 1), width: 2),
-        ),
-      ),
-      child: TextField(
-        controller: _confirmPasswordController,
-        obscureText: true,
-        decoration: const InputDecoration(
-          hintText: 'Confirme su contraseña',
-          hintStyle: TextStyle(color: Colors.white),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.all(15),
-          prefixIcon: Icon(Icons.key, color: Colors.white),
-        ),
-      ),
-    );
-  }
-
-  Widget _buttonAction() {
-    String buttonText;
-    VoidCallback onPressed;
-
-    switch (_currentStep) {
-      case 0:
-        buttonText = 'Verificar correo';
-        onPressed = _verifyEmail;
-        break;
-      case 1:
-        buttonText = 'Verificar';
-        onPressed = _verifyCode;
-        break;
-      case 2:
-        buttonText = 'Registrarme';
-        onPressed = _register;
-        break;
-      default:
-        buttonText = 'Continuar';
-        onPressed = () {};
-    }
-
+  Widget _buttonAction(Color accentColor) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
-          backgroundColor: const Color.fromRGBO(245, 188, 6, 1),
-          padding: const EdgeInsets.symmetric(vertical: 15),
-        ),
-        child: Text(
-          buttonText,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
+      margin: const EdgeInsets.symmetric(vertical: 20),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _controller.loading,
+        builder: (context, isLoading, child) {
+          return ElevatedButton(
+            onPressed: isLoading ? null : _controller.register,
+            style: ElevatedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+              backgroundColor: accentColor,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+            ),
+            child: isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: Colors.black,
+                    ),
+                  )
+                : const Text(
+                    'Registrarme',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.black,
+                    ),
+                  ),
+          );
+        },
       ),
     );
-  }
-
-  void _verifyEmail() {
-    setState(() {
-      _currentStep = 1;
-    });
-  }
-
-  void _verifyCode() {
-    setState(() {
-      _currentStep = 2;
-    });
-  }
-
-  void _register() {
-    _controller.goToLoginPage();
   }
 }

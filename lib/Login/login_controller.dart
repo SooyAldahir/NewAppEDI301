@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+// 1. Importar AMBOS almacenamientos
 import 'package:shared_preferences/shared_preferences.dart';
+import '../auth/token_storage.dart';
 import '../core/api_client_http.dart';
 
 class LoginController {
@@ -10,6 +12,9 @@ class LoginController {
 
   final ApiHttp _http = ApiHttp();
   late BuildContext _ctx;
+
+  // 2. Instanciar el almacenamiento seguro
+  final TokenStorage _tokenStorage = TokenStorage();
 
   void init(BuildContext context) => _ctx = context;
 
@@ -36,10 +41,7 @@ class LoginController {
     try {
       final res = await _http.postJson(
         '/api/auth/login',
-        data: {
-          'login': login, // correo / matrícula / num_empleado
-          'password': password,
-        },
+        data: {'login': login, 'password': password},
       );
 
       if (res.statusCode >= 400) {
@@ -52,9 +54,14 @@ class LoginController {
       final token = (data['session_token'] ?? data['token'] ?? '').toString();
       if (token.isEmpty) throw Exception('No se recibió session_token');
 
+      // --- 3. Guardar el TOKEN en SecureStorage ---
+      await _tokenStorage.save(token);
+
+      // --- 4. Guardar los DATOS DE USUARIO en SharedPreferences ---
+      // (Esto es lo que faltaba y arregla tu página de perfil)
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('session_token', token);
       await prefs.setString('user', jsonEncode(data));
+      // -----------------------------------------------------------
 
       // Ruteo opcional según rol/tipo
       final rol = (data['rol'] ?? data['role'] ?? '').toString();
@@ -62,6 +69,7 @@ class LoginController {
           .toString();
       final route = _routeForRole(rol, tipoUsuario);
 
+      if (!_ctx.mounted) return;
       FocusScope.of(_ctx).unfocus();
       Navigator.of(_ctx).pushNamedAndRemoveUntil(route, (_) => false);
     } catch (e) {
@@ -89,6 +97,7 @@ class LoginController {
   }
 
   void _snack(String msg) {
+    if (!_ctx.mounted) return;
     ScaffoldMessenger.of(_ctx).showSnackBar(
       SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
     );

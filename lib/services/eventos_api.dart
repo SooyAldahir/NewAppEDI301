@@ -1,22 +1,63 @@
+// lib/services/eventos_api.dart
 import 'dart:convert';
 import '../core/api_client_http.dart';
+
+// --- MODELO (para la lista) ---
+// (Lo ponemos aquí para simplicidad)
+class Evento {
+  final int id;
+  final String titulo;
+  final String? descripcion;
+  final DateTime fechaEvento;
+  final String? horaEvento;
+  final String? imagen;
+  final String estado;
+
+  Evento({
+    required this.id,
+    required this.titulo,
+    this.descripcion,
+    required this.fechaEvento,
+    this.horaEvento,
+    this.imagen,
+    required this.estado,
+  });
+
+  factory Evento.fromJson(Map<String, dynamic> j) {
+    return Evento(
+      id: j['id_actividad'],
+      titulo: j['titulo'],
+      descripcion: j['descripcion'],
+      fechaEvento: DateTime.parse(j['fecha_evento']),
+      horaEvento: j['hora_evento'],
+      imagen: j['imagen'],
+      estado: j['estado_publicacion'],
+    );
+  }
+}
+// --- FIN DEL MODELO ---
 
 class EventosApi {
   final ApiHttp _http = ApiHttp();
 
-  Future<int> crearEvento({
-    required int idUsuario,
-    String? detalles,
+  // --- FUNCIÓN CORREGIDA ---
+  Future<Map<String, dynamic>> crearEvento({
+    required String titulo,
     required DateTime fecha,
+    String? hora, // (ej: "13:00")
+    String? descripcion,
+    String? imagenUrl,
   }) async {
-    final res = await _http.postJson(
-      '/api/eventos',
-      data: {
-        "IdUsuario": idUsuario,
-        "Detalles": detalles,
-        "Fecha": fecha.toUtc().toIso8601String(),
-      },
-    );
+    final payload = {
+      "titulo": titulo,
+      "descripcion": descripcion,
+      "fecha_evento": fecha.toIso8601String().split('T').first, // "YYYY-MM-DD"
+      "hora_evento": hora, // "HH:MM"
+      "imagen": imagenUrl,
+      "estado_publicacion": "Publicada",
+    };
+
+    final res = await _http.postJson('/api/agenda', data: payload);
 
     if (res.statusCode >= 400) {
       throw Exception('Error ${res.statusCode}: ${res.body}');
@@ -24,19 +65,14 @@ class EventosApi {
 
     final body = jsonDecode(res.body);
     if (body is Map<String, dynamic>) {
-      // Ajusta la clave según tu backend
-      if (body.containsKey('EventoID')) {
-        return (body['EventoID'] as num).toInt();
-      }
-      if (body.containsKey('id')) {
-        return (body['id'] as num).toInt();
-      }
+      return body;
     }
-    throw Exception('La API no retornó un id de evento válido');
+    throw Exception('La API no retornó un evento válido');
   }
+  // --- FIN FUNCIÓN CORREGIDA ---
 
-  Future<List<Map<String, dynamic>>> listar() async {
-    final res = await _http.getJson('/api/eventos');
+  Future<List<Evento>> listar() async {
+    final res = await _http.getJson('/api/agenda');
 
     if (res.statusCode >= 400) {
       throw Exception('Error ${res.statusCode}: ${res.body}');
@@ -46,18 +82,13 @@ class EventosApi {
 
     if (data is List) {
       return data
-          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
+          .map<Evento>(
+            (e) => Evento.fromJson(Map<String, dynamic>.from(e as Map)),
+          )
           .toList();
     }
 
-    // Por si tu backend envía { "data": [ ... ] } o similar
-    if (data is Map && data.values.isNotEmpty && data.values.first is List) {
-      final list = data.values.first as List;
-      return list
-          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-    }
-
-    return <Map<String, dynamic>>[];
+    // Fallback por si acaso
+    return <Evento>[];
   }
 }

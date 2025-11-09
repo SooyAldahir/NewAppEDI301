@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:edi301/services/search_api.dart';
 import 'package:edi301/src/pages/Admin/add_family/add_family_controller.dart';
+import 'package:url_launcher/url_launcher.dart'; // <-- 1. Importar
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -47,14 +48,40 @@ class _SearchPageState extends State<SearchPage> {
       _alumnos.value = [];
       _empleados.value = [];
       _familias.value = [];
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo completar la búsqueda')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo completar la búsqueda')),
+        );
+      }
     } finally {
       _loading.value = false;
       setState(() => _searched = true);
     }
   }
+
+  // --- 2. Añadir helper para botones de contacto ---
+  Future<void> _makeAction(
+    String scheme,
+    String path,
+    String actionName,
+  ) async {
+    final String value = path.trim();
+    if (value.isEmpty || value == '—') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No hay un $actionName disponible.')),
+      );
+      return;
+    }
+    final Uri uri = Uri(scheme: scheme, path: value);
+    if (!await canLaunchUrl(uri)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo $actionName a $value')),
+      );
+    } else {
+      await launchUrl(uri);
+    }
+  }
+  // ------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -74,8 +101,9 @@ class _SearchPageState extends State<SearchPage> {
               child: ValueListenableBuilder<bool>(
                 valueListenable: _loading,
                 builder: (_, loading, __) {
-                  if (loading)
+                  if (loading) {
                     return const Center(child: CircularProgressIndicator());
+                  }
                   return _bodyResults();
                 },
               ),
@@ -89,7 +117,13 @@ class _SearchPageState extends State<SearchPage> {
   Widget _bodyResults() {
     if (!_searched) {
       return const Center(
-        child: Text('Ingresa una matrícula, # de empleado o nombre de familia'),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24.0),
+          child: Text(
+            'Ingresa una matrícula, # de empleado o nombre de familia',
+            textAlign: TextAlign.center,
+          ),
+        ),
       );
     }
     return ListView(
@@ -162,7 +196,6 @@ class _SearchPageState extends State<SearchPage> {
     final tipo = (u.tipo).toUpperCase();
     final fullName = '${u.nombre} ${u.apellido}'.trim();
 
-    // 👇 prioriza numEmpleado para EMPLEADO; si no hay, cae a matrícula
     final doc = (tipo == 'EMPLEADO' && u.numEmpleado != null)
         ? 'No. empleado: ${u.numEmpleado}'
         : (u.matricula != null ? 'Matrícula: ${u.matricula}' : '');
@@ -171,28 +204,20 @@ class _SearchPageState extends State<SearchPage> {
       leading: const CircleAvatar(child: Icon(Icons.person)),
       title: Text(fullName.isEmpty ? '—' : fullName),
       subtitle: Text([tipo, doc].where((e) => e.isNotEmpty).join(' · ')),
-      trailing: IconButton(
-        tooltip: 'Ver detalle',
-        icon: const Icon(Icons.remove_red_eye_outlined),
-        onPressed: () {
-          final args = <String, dynamic>{
-            'name': fullName,
-            'email': u.email ?? '—',
-            'status': 'Activo',
-            'grade': tipo == 'ALUMNO' ? '—' : 'Empleado',
-
-            // 👇 Etiqueta y valor del documento según el tipo
-            'docLabel': (tipo == 'EMPLEADO') ? 'No. empleado' : 'Matrícula',
-            'docValue': (tipo == 'EMPLEADO')
-                ? (u.numEmpleado?.toString() ?? '—')
-                : (u.matricula?.toString() ?? '—'),
-
-            // (opcional) por compat: si tu detalle aún lee 'matricula'
-            'matricula': u.matricula?.toString() ?? '—',
-            'numEmpleado': u.numEmpleado?.toString(),
-          };
-          Navigator.pushNamed(context, 'student_detail', arguments: args);
-        },
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // --- 4. BOTÓN DE DETALLE (CORREGIDO) ---
+          IconButton(
+            tooltip: 'Ver detalle',
+            icon: const Icon(Icons.remove_red_eye_outlined),
+            onPressed: () {
+              // Ahora pasamos el ID de usuario, que es lo que espera
+              // la página de detalle.
+              Navigator.pushNamed(context, 'student_detail', arguments: u.id);
+            },
+          ),
+        ],
       ),
     );
   }
@@ -204,24 +229,10 @@ class _SearchPageState extends State<SearchPage> {
         : Colors.red;
 
     void openFamily() {
-      // FamilyDetailPage espera un índice de AddFamilyController.familyList
-      final list = AddFamilyController.familyList.value;
-      final idx = list.indexWhere(
-        (x) =>
-            x.familyName.toLowerCase().trim() ==
-            (f.nombre.toLowerCase().trim()),
-      );
-      if (idx < 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'La familia "${f.nombre}" no está cargada en la lista local',
-            ),
-          ),
-        );
-        return;
-      }
-      Navigator.pushNamed(context, 'family_detail', arguments: idx);
+      // --- 5. LÓGICA DE NAVEGACIÓN (CORREGIDA) ---
+      // Ya no buscamos en la lista estática.
+      // Pasamos el ID de la familia directamente.
+      Navigator.pushNamed(context, 'family_detail', arguments: f.id);
     }
 
     return ListTile(
@@ -277,7 +288,7 @@ class _SearchPageState extends State<SearchPage> {
         ),
         suffixIcon: IconButton(
           icon: const Icon(Icons.search, color: Color.fromRGBO(19, 67, 107, 1)),
-          onPressed: _runSearch,
+          onPressed: () => _runSearch(),
         ),
       ),
     );

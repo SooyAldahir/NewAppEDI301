@@ -216,32 +216,12 @@ class SettingsCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Column(
         children: [
-          _switchTile(
-            icon: Icons.notifications_active_outlined,
-            title: 'Activar notificaciones',
-            value: notif,
-            onChanged: (v) => onChanged('notif', v),
-          ),
           _divider(),
           _switchTile(
             icon: Icons.dark_mode_outlined,
             title: 'Modo oscuro',
             value: darkMode,
             onChanged: (v) => onChanged('dark', v),
-          ),
-          _divider(),
-          _switchTile(
-            icon: Icons.image_outlined,
-            title: 'Mostrar foto de perfil',
-            value: showAvatar,
-            onChanged: (v) => onChanged('avatar', v),
-          ),
-          _divider(),
-          _switchTile(
-            icon: Icons.sync_outlined,
-            title: 'Actualización en 2º plano',
-            value: bgRefresh,
-            onChanged: (v) => onChanged('bg', v),
           ),
           _divider(),
           _switchTile(

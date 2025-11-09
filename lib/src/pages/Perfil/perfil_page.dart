@@ -1,8 +1,10 @@
+import 'dart:async'; // <--- 1. Importar para 'mounted'
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:edi301/core/api_client_http.dart';
 import 'package:edi301/src/pages/Perfil/perfil_widgets.dart';
+import 'package:edi301/auth/token_storage.dart'; // <--- 2. Importar almacenamiento seguro
 
 class PerfilPage extends StatefulWidget {
   const PerfilPage({super.key});
@@ -19,7 +21,7 @@ class _PerfilPageState extends State<PerfilPage> {
     'phone': '—',
     'email': '—',
     'residence': '—', // 'Interna' | 'Externa'
-    'family': '—',
+    'family': '—', // <--- Este campo se llenará desde la API
     'address': '—',
     'birthday': '—',
     'avatarUrl': 'https://cdn-icons-png.flaticon.com/512/7141/7141724.png',
@@ -36,7 +38,9 @@ class _PerfilPageState extends State<PerfilPage> {
   bool _loading = true;
   final primary = const Color.fromRGBO(19, 67, 107, 1);
 
+  // --- 3. Definir http y storage como variables de clase ---
   final ApiHttp _http = ApiHttp();
+  final TokenStorage _storage = TokenStorage();
 
   @override
   void initState() {
@@ -71,11 +75,13 @@ class _PerfilPageState extends State<PerfilPage> {
             .toString(),
         'status': (u['estado'] ?? u['Estado'] ?? 'Activo').toString(),
         'grade': (u['carrera'] ?? '—').toString(), // para alumnos
+        // --- 4. Añadir el nombre de la familia desde el local ---
+        'family': (u['nombre_familia'] ?? '—').toString(),
       };
     });
   }
 
-  // 2) Completa desde API /api/users/:id para traer campos nuevos/actualizados
+  // 2) Completa desde API /api/usuarios/:id para traer campos nuevos/actualizados
   Future<void> _fetchFromServer() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -86,9 +92,8 @@ class _PerfilPageState extends State<PerfilPage> {
 
       if (id == null) return;
 
-      final res = await _http.getJson(
-        '/api/users/$id',
-      ); // ajusta si tu endpoint difiere
+      // Usar la ruta correcta en español
+      final res = await _http.getJson('/api/usuarios/$id');
       if (res.statusCode >= 400) return;
 
       final x = jsonDecode(res.body) as Map<String, dynamic>;
@@ -122,7 +127,8 @@ class _PerfilPageState extends State<PerfilPage> {
                   .toString(),
           'status': (x['estado'] ?? x['Estado'] ?? data['status']).toString(),
           'grade': (x['carrera'] ?? data['grade']).toString(),
-          // 'family': podrías llenar con /api/users/:id/familia si existe
+          // --- 5. AÑADIR EL CAMPO DE FAMILIA DESDE LA API ---
+          'family': (x['nombre_familia'] ?? data['family']).toString(),
         };
       });
     } catch (_) {
@@ -133,8 +139,66 @@ class _PerfilPageState extends State<PerfilPage> {
   Future<void> _loadProfile() async {
     setState(() => _loading = true);
     await _hydrateFromLocal();
-    await _fetchFromServer(); // comenta esta línea si aún no tienes el endpoint
+    await _fetchFromServer();
     setState(() => _loading = false);
+  }
+
+  // --- 6. NUEVA FUNCIÓN DE LOGOUT ---
+  Future<void> _handleLogout() async {
+    // Mostrar diálogo de confirmación
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cerrar Sesión'),
+        content: const Text('¿Estás seguro de que deseas cerrar tu sesión?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false), // No
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), // Sí
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Cerrar Sesión'),
+          ),
+        ],
+      ),
+    );
+
+    // Si el usuario no confirma (presiona Cancelar o fuera del diálogo)
+    if (confirmed != true) {
+      return;
+    }
+
+    // Si el widget ya no está montado, no hacer nada más
+    if (!mounted) return;
+
+    // Mostrar un spinner de carga
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // Llamar a la API de logout (esto invalidará el token en el backend)
+      await _http.postJson('/api/auth/logout');
+    } catch (e) {
+      // Ignorar errores, lo importante es borrar el token local
+      debugPrint('Error al llamar a /api/auth/logout: $e');
+    }
+
+    // Limpiar el token del almacenamiento seguro
+    await _storage.clear();
+
+    // Limpiar SharedPreferences (donde guardabas 'user')
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user');
+
+    // Si sigue montado, navegar a login y limpiar todas las rutas
+    if (mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil('login', (_) => false);
+    }
   }
 
   // ===== helpers UI existentes =====
@@ -184,12 +248,11 @@ class _PerfilPageState extends State<PerfilPage> {
               floating: true,
               snap: true,
               actions: [
+                // --- 7. REEMPLAZAR BOTÓN DE EDITAR POR LOGOUT ---
                 IconButton(
-                  tooltip: 'Editar perfil',
-                  icon: const Icon(Icons.edit),
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Editar perfil (pendiente)')),
-                  ),
+                  tooltip: 'Cerrar sesión',
+                  icon: const Icon(Icons.logout),
+                  onPressed: _handleLogout, // Llamar a la nueva función
                 ),
               ],
             ),
@@ -212,7 +275,7 @@ class _PerfilPageState extends State<PerfilPage> {
           children: [
             HeaderCard(
               name: s('name'),
-              family: s('family'),
+              family: s('family'), // <--- 8. Este campo ahora se llenará
               residence: s('residence'),
               status: s('status', 'Activo'),
               avatarUrl: s('avatarUrl'),

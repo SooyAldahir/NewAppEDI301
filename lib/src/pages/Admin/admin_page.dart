@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:edi301/src/pages/Admin/reportes/reporte_familias_service.dart';
+import 'package:flutter/scheduler.dart';
 
 class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
@@ -31,7 +33,7 @@ class _AdminPageState extends State<AdminPage> {
             child: CustomButton(
               label: 'Agregar Familia',
               onPressed: () => Navigator.pushNamed(context, 'add_family'),
-              icon: Icons.add_home,
+              icon: const Icon(Icons.add_home, color: Colors.white, size: 30),
             ),
           ),
           const SizedBox(height: 15),
@@ -40,7 +42,7 @@ class _AdminPageState extends State<AdminPage> {
             child: CustomButton(
               label: 'Asignar Alumnos',
               onPressed: () => Navigator.pushNamed(context, 'add_alumns'),
-              icon: Icons.person_add,
+              icon: const Icon(Icons.person_add, color: Colors.white, size: 30),
             ),
           ),
           const SizedBox(height: 15),
@@ -49,7 +51,34 @@ class _AdminPageState extends State<AdminPage> {
             child: CustomButton(
               label: 'Consultar Familias',
               onPressed: () => Navigator.pushNamed(context, 'get_family'),
-              icon: Icons.visibility,
+              icon: const Icon(Icons.visibility, color: Colors.white, size: 30),
+            ),
+          ),
+          const SizedBox(height: 15),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: CustomButton(
+              label: 'Mi Agenda',
+              onPressed: () => Navigator.pushNamed(context, 'agenda'),
+              icon: const Icon(
+                Icons.calendar_month,
+                color: Colors.white,
+                size: 30,
+              ),
+            ),
+          ),
+          const SizedBox(height: 15),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: CustomButton(
+              label: 'Reportes PDF', // <-- Nuevo texto
+              onPressed: () =>
+                  Navigator.pushNamed(context, 'reportes'), // <-- Nueva acción
+              icon: const Icon(
+                Icons.picture_as_pdf,
+                color: Colors.white,
+                size: 30,
+              ), // <-- Icono fijo
             ),
           ),
           const SizedBox(height: 15),
@@ -62,13 +91,13 @@ class _AdminPageState extends State<AdminPage> {
 class CustomButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
-  final IconData? icon;
+  final Widget icon;
 
   const CustomButton({
     super.key,
     required this.label,
     required this.onPressed,
-    this.icon,
+    required this.icon,
   });
 
   @override
@@ -97,7 +126,7 @@ class CustomButton extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10), // Espacio entre el texto y el icono
-          Icon(icon, color: Colors.white, size: 30),
+          icon,
         ],
       ),
     );

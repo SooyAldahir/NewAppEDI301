@@ -48,4 +48,20 @@ class MembersApi {
       throw Exception(msg);
     }
   }
+
+  Future<void> removeMember(int idMiembro) async {
+    // Llama a la nueva ruta DELETE que creamos
+    final res = await _http.deleteJson('/api/miembros/$idMiembro');
+
+    if (res.statusCode >= 400) {
+      String msg = 'Error ${res.statusCode}: ${res.body}';
+      try {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map && decoded.containsKey('error')) {
+          msg = decoded['error'] as String;
+        }
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
 }

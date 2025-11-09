@@ -226,39 +226,6 @@ class AddFamilyController {
     }
   }
 
-  // ========= Usado por otras pantallas =========
-  static bool addStudentsToFamily(String famName, List<String> students) {
-    final idx = familyList.value.indexWhere(
-      (f) => f.familyName.toLowerCase().trim() == famName.toLowerCase().trim(),
-    );
-    if (idx < 0) return false;
-    final f = familyList.value[idx];
-    final updated = f.copyWith(
-      assignedStudents: [...f.assignedStudents, ...students],
-    );
-    final list = [...familyList.value];
-    list[idx] = updated;
-    familyList.value = list;
-    return true;
-  }
-
-  static void removeHouseholdChild(int index, String child) {
-    if (index < 0 || index >= familyList.value.length) return;
-    final f = familyList.value[index];
-    final list = [...f.householdChildren]..remove(child);
-    final updated = f.copyWith(householdChildren: list);
-    final all = [...familyList.value];
-    all[index] = updated;
-    familyList.value = all;
-  }
-
-  static void removeAssignedStudent(int index, String student) {
-    if (index < 0 || index >= familyList.value.length) return;
-    final f = familyList.value[index];
-    final list = [...f.assignedStudents]..remove(student);
-    final updated = f.copyWith(assignedStudents: list);
-    final all = [...familyList.value];
-    all[index] = updated;
-    familyList.value = all;
-  }
+  // ========= Funciones eliminadas =========
+  // ... (Las funciones addStudentsToFamily, removeHouseholdChild y removeAssignedStudent han sido eliminadas) ...
 }

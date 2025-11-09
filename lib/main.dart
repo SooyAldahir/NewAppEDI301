@@ -1,3 +1,4 @@
+import 'package:edi301/src/pages/Admin/agenda/agenda_detail_page.dart';
 import 'package:flutter/material.dart';
 import 'package:edi301/Login/login_page.dart';
 import 'package:edi301/Register/register_page.dart';
@@ -13,6 +14,9 @@ import 'package:edi301/src/pages/Admin/add_alumns/add_alumns_page.dart';
 import 'package:edi301/src/pages/Admin/get_family/get_family_page.dart';
 import 'package:edi301/src/pages/Admin/family_detail/Family_detail_page.dart';
 import 'package:edi301/src/pages/Admin/studient_detail/studient_detail_page.dart';
+import 'package:edi301/src/pages/Admin/agenda/agenda_page.dart';
+import 'package:edi301/src/pages/Admin/agenda/crear_evento_page.dart';
+import 'package:edi301/src/pages/Admin/reportes/reportes_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -31,7 +35,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: false,
       ),
       initialRoute: 'login',
-      routes: {
+      routes: <String, WidgetBuilder>{
         'login': (context) => const LoginPage(),
         'register': (context) => const RegisterPage(),
         'home': (context) => const HomePage(),
@@ -46,6 +50,10 @@ class MyApp extends StatelessWidget {
         'get_family': (context) => const GetFamilyPage(),
         'family_detail': (_) => const FamilyDetailPage(),
         'student_detail': (_) => const StudentDetailPage(),
+        'agenda': (context) => const AgendaPage(),
+        'crear_evento': (context) => const CrearEventoPage(),
+        'agenda_detail': (context) => const AgendaDetailPage(),
+        'reportes': (context) => const ReportesPage(),
       },
     );
   }
