@@ -13,23 +13,9 @@ class ApiHttp extends http.BaseClient {
   // Ajusta tu base URL:
   static const String _baseUrl = 'http://10.219.84.3:3000';
 
-  // --- 1. AÑADIDO: Expone la URL base para las imágenes ---
-  static const String baseUrl = _baseUrl;
-
-  // --- 2. AÑADIDO: Método estático para construir URI ---
-  static Uri getUri(String url) {
-    // Permite pasar path como '/api/...' o URLs absolutas
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Uri.parse(url);
-    }
-    // normaliza: evita doble slash
-    final base = _baseUrl.endsWith('/')
-        ? _baseUrl.substring(0, _baseUrl.length - 1)
-        : _baseUrl;
-    final path = url.startsWith('/') ? url : '/$url';
-    return Uri.parse('$base$path');
-  }
-  // --- FIN DE CAMBIOS ---
+  // --- 1. HACEMOS PÚBLICA LA BASE URL ---
+  static String get baseUrl => _baseUrl;
+  // ------------------------------------
 
   final http.Client _inner = http.Client();
 
@@ -49,11 +35,9 @@ class ApiHttp extends http.BaseClient {
   }
 
   Uri _resolve(String url) {
-    // Permite pasar path como '/api/...' o URLs absolutas
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return Uri.parse(url);
     }
-    // normaliza: evita doble slash
     final base = _baseUrl.endsWith('/')
         ? _baseUrl.substring(0, _baseUrl.length - 1)
         : _baseUrl;
@@ -63,17 +47,12 @@ class ApiHttp extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    // “Interceptor” de auth: añade el header Authorization si hay token
     final token = await _readToken();
     request.headers.addAll(_baseHeaders);
     if (token != null) {
-      request.headers['Authorization'] = 'Bearer $token';
+      // --- 2. CORRECCIÓN DE AUTH (sin "Bearer ") ---
+      request.headers['Authorization'] = token;
     }
-
-    // Logging MUY simple (puedes quitarlo en prod)
-    // print('[HTTP] ${request.method} ${request.url} headers=${request.headers}');
-
-    // Timeout global
     return _inner.send(request).timeout(_timeout);
   }
 
@@ -113,17 +92,40 @@ class ApiHttp extends http.BaseClient {
     return delete(uri).timeout(_timeout);
   }
 
-  /// Subida multipart (equivalente a Dio+FormData)
+  /// Subida multipart (POST)
   Future<http.StreamedResponse> multipart(
     String url, {
-    String method = 'POST', // <--- Esto ya estaba en tu código, está bien
     Map<String, String>? fields,
     List<http.MultipartFile>? files,
   }) {
     final uri = _resolve(url);
-    final req = http.MultipartRequest(method, uri);
+    final req = http.MultipartRequest('POST', uri);
     if (fields != null) req.fields.addAll(fields);
     if (files != null) req.files.addAll(files);
-    return send(req); // 'send' ya añade el token de auth automáticamente
+    return send(req);
   }
+
+  // --- 3. AÑADIMOS 'patchMultipart' (para fotos de familia) ---
+  Future<http.StreamedResponse> patchMultipart(
+    String url, {
+    Map<String, String>? fields,
+    List<http.MultipartFile>? files,
+  }) {
+    final uri = _resolve(url);
+    final req = http.MultipartRequest('PATCH', uri);
+    if (fields != null) req.fields.addAll(fields);
+    if (files != null) req.files.addAll(files);
+    return send(req);
+  }
+  // ------------------------------------
+
+  // --- 4. AÑADIMOS 'patchJson' (arregla tu error actual) ---
+  Future<http.Response> patchJson(String url, {Object? data}) {
+    final uri = _resolve(url);
+    final req = http.Request('PATCH', uri);
+    if (data != null) req.body = jsonEncode(data);
+    return send(req).then(http.Response.fromStream).timeout(_timeout);
+  }
+
+  // ----------------------------------------------------
 }
