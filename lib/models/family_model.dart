@@ -1,12 +1,11 @@
-// lib/models/family_model.dart
 import 'package:flutter/foundation.dart';
 
-// 1. Clase auxiliar para los miembros
+// Modelo auxiliar para Miembros (lo actualizamos en un paso anterior)
 class FamilyMember {
-  final int idMiembro; // ID de la relación (Miembros_Familia.id_miembro)
-  final int idUsuario; // ID del usuario (Usuarios.id_usuario)
+  final int idMiembro;
+  final int idUsuario;
   final String fullName;
-  final String tipoMiembro; // 'HIJO' o 'ALUMNO_ASIGNADO'
+  final String tipoMiembro;
 
   final int? matricula;
   final String? telefono;
@@ -43,6 +42,7 @@ class FamilyMember {
       idUsuario: (j['id_usuario'] ?? 0) as int,
       fullName: '$nombre $apellido'.trim(),
       tipoMiembro: (j['tipo_miembro'] ?? 'HIJO') as String,
+
       matricula: (j['matricula'] as num?)?.toInt(),
       telefono: j['telefono']?.toString(),
       carrera: j['carrera']?.toString(),
@@ -51,32 +51,30 @@ class FamilyMember {
   }
 }
 
-// 2. Clase principal de la Familia
+// --- CLASE FAMILY ACTUALIZADA ---
 class Family {
-  // PK unificada
-  final int? id; // mapea id_familia / FamiliaID / id
-
-  // Campos principales
+  final int? id;
   final String familyName;
   final String? fatherName;
   final String? motherName;
-  final String? residencia; // 'INTERNA' | 'EXTERNA'
+  final String? residencia;
   final String? direccion;
 
-  // --- Listas actualizadas ---
-  final List<FamilyMember> assignedStudents; // "Alumnos asignados"
-  final List<FamilyMember> householdChildren; // "Hijos en casa"
+  final List<FamilyMember> assignedStudents;
+  final List<FamilyMember> householdChildren;
 
-  // IDs de empleados (si algún día los quieres poblar)
   final int? fatherEmployeeId;
   final int? motherEmployeeId;
-
   final String? papaNumEmpleado;
   final String? mamaNumEmpleado;
-  // Getter legacy para no romper referencias: f.residence -> f.residencia
+
+  // --- AÑADE ESTOS CAMPOS ---
+  final String? fotoPortadaUrl;
+  final String? fotoPerfilUrl;
+  // -------------------------
+
   String get residence => residencia ?? '';
 
-  // --- Constructor actualizado ---
   const Family({
     required this.id,
     required this.familyName,
@@ -90,11 +88,12 @@ class Family {
     this.motherEmployeeId,
     this.papaNumEmpleado,
     this.mamaNumEmpleado,
+    // --- AÑADE AL CONSTRUCTOR ---
+    this.fotoPortadaUrl,
+    this.fotoPerfilUrl,
   });
 
-  // --- Factory FromJson actualizado ---
   factory Family.fromJson(Map<String, dynamic> j) {
-    // normaliza residencia a 'Interna' / 'Externa' si es posible
     String? _normalizeRes(dynamic v) {
       if (v == null) return null;
       final s = v.toString().trim();
@@ -105,17 +104,13 @@ class Family {
       return s;
     }
 
-    // --- LÓGICA NUEVA PARA PROCESAR MIEMBROS ---
     final List<FamilyMember> householdChildren = [];
     final List<FamilyMember> assignedStudents = [];
 
     if (j['miembros'] is List) {
       for (final miembro in (j['miembros'] as List)) {
         if (miembro is Map<String, dynamic>) {
-          // Usar el factory de la helper class
           final familyMember = FamilyMember.fromJson(miembro);
-
-          // LÓGICA DE SEPARACIÓN
           if (familyMember.tipoMiembro == 'HIJO') {
             householdChildren.add(familyMember);
           } else if (familyMember.tipoMiembro == 'ALUMNO_ASIGNADO') {
@@ -124,7 +119,6 @@ class Family {
         }
       }
     }
-    // --- FIN DE LÓGICA NUEVA ---
 
     return Family(
       id: (j['id_familia'] ?? j['FamiliaID'] ?? j['id']) as int?,
@@ -147,11 +141,8 @@ class Family {
               ?.toString(),
       residencia: _normalizeRes(j['residencia'] ?? j['Residencia']),
       direccion: (j['direccion'] ?? j['Direccion'])?.toString(),
-
-      // Usa las nuevas listas que acabamos de crear
       householdChildren: householdChildren,
       assignedStudents: assignedStudents,
-
       fatherEmployeeId:
           (j['papa_id'] ??
                   j['Papa_id'] ??
@@ -166,6 +157,10 @@ class Family {
               as int?,
       papaNumEmpleado: j['papa_num_empleado']?.toString(),
       mamaNumEmpleado: j['mama_num_empleado']?.toString(),
+
+      // --- AÑADE EL PARSEO ---
+      fotoPortadaUrl: j['foto_portada_url']?.toString(),
+      fotoPerfilUrl: j['foto_perfil_url']?.toString(),
     );
   }
 
@@ -178,9 +173,11 @@ class Family {
     'direccion': direccion,
     'papa_id': fatherEmployeeId,
     'mama_id': motherEmployeeId,
+    // --- AÑADE AL JSON ---
+    'foto_portada_url': fotoPortadaUrl,
+    'foto_perfil_url': fotoPerfilUrl,
   };
 
-  // --- copyWith actualizado ---
   Family copyWith({
     int? id,
     String? familyName,
@@ -192,8 +189,11 @@ class Family {
     List<FamilyMember>? householdChildren,
     int? fatherEmployeeId,
     int? motherEmployeeId,
-    String? papaNumEmpleado, // <-- Añadir
+    String? papaNumEmpleado,
     String? mamaNumEmpleado,
+    // --- AÑADE AL COPYWITH ---
+    String? fotoPortadaUrl,
+    String? fotoPerfilUrl,
   }) {
     return Family(
       id: id ?? this.id,
@@ -208,6 +208,9 @@ class Family {
       motherEmployeeId: motherEmployeeId ?? this.motherEmployeeId,
       papaNumEmpleado: papaNumEmpleado ?? this.papaNumEmpleado,
       mamaNumEmpleado: mamaNumEmpleado ?? this.mamaNumEmpleado,
+      // --- AÑADE ---
+      fotoPortadaUrl: fotoPortadaUrl ?? this.fotoPortadaUrl,
+      fotoPerfilUrl: fotoPerfilUrl ?? this.fotoPerfilUrl,
     );
   }
 }

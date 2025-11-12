@@ -1,4 +1,3 @@
-import 'package:edi301/src/theme_service.dart';
 import 'package:flutter/material.dart';
 import 'package:edi301/Login/login_page.dart';
 import 'package:edi301/Register/register_page.dart';
@@ -18,11 +17,11 @@ import 'package:edi301/src/pages/Admin/agenda/agenda_page.dart';
 import 'package:edi301/src/pages/Admin/agenda/crear_evento_page.dart';
 import 'package:edi301/src/pages/Admin/agenda/agenda_detail_page.dart';
 import 'package:edi301/src/pages/Admin/reportes/reportes_page.dart';
+import 'package:edi301/src/theme_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await loadTheme(); // Carga el tema guardado
-
+  await loadTheme();
   runApp(const MyApp());
 }
 
@@ -31,72 +30,92 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // --- 1. DEFINIR COLORES ---
+    // Colores originales para el TEMA CLARO
     final Color primaryBlue = const Color.fromRGBO(19, 67, 107, 1);
     final Color accentYellow = const Color.fromRGBO(245, 188, 6, 1);
 
-    final Color darkSurface =
-        Colors.grey[850]!; // #303030 (Para AppBars, Cards)
-    final Color darkBackground = Colors.grey[900]!; // #212121 (Fondo principal)
+    // --- 1. DEFINIR TEMA OSCURO (TONOS GRISES) ---
+    final Color darkSurface = Colors.grey[850]!; // #303030 (Cards, AppBars)
+    final Color darkBackground = Colors.grey[900]!; // #212121 (Fondo)
+    final Color lightGreyAccent = Colors.grey[700]!; // Acento para botones
 
-    // --- 2. DEFINIR EL TEMA OSCURO PERSONALIZADO ---
     final ThemeData customDarkTheme = ThemeData(
       brightness: Brightness.dark,
       useMaterial3: false,
+
+      // Colores de fondo
       scaffoldBackgroundColor: darkBackground,
-      cardColor: darkSurface, // <-- ESTA LÍNEA ES LA CORRECTA
+      cardColor: darkSurface,
+
+      // Esquema de color (TONOS GRISES)
       colorScheme: ColorScheme.dark(
-        primary: accentYellow,
-        secondary: primaryBlue,
-        background: darkBackground,
-        surface: darkSurface,
-        onPrimary: Colors.black,
-        onSurface: Colors.white,
-        onBackground: Colors.white,
+        primary: lightGreyAccent, // Color principal (botones, switches)
+        secondary: Colors.grey[800]!, // Color secundario
+        background: darkBackground, // Fondo de la app
+        surface: darkSurface, // Superficie de (Cards, AppBars, Dialogs)
+        onPrimary: Colors.white, // Texto sobre botones grises
+        onSurface: Colors.white, // Texto sobre cards/appbars
+        onBackground: Colors.white, // Texto sobre el fondo
       ),
+
+      // Tema para AppBar
       appBarTheme: AppBarTheme(
-        backgroundColor: darkSurface,
+        backgroundColor: darkSurface, // <-- GRIS OSCURO
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(
+          color: Colors.white,
+        ), // Ícono de flecha atrás
         titleTextStyle: const TextStyle(
+          // Título del AppBar
           color: Colors.white,
           fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
       ),
+
+      // Tema para Bottom Navigation Bar
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: darkSurface,
-        selectedItemColor: accentYellow,
-        unselectedItemColor: Colors.grey[500],
+        backgroundColor: darkSurface, // <-- GRIS OSCURO
+        selectedItemColor: Colors.white, // Ícono activo (Blanco)
+        unselectedItemColor: Colors.grey[600], // Íconos inactivos (Gris)
       ),
 
-      // --- CORRECCIÓN AQUÍ ---
+      cardTheme: CardThemeData(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
 
-      // -----------------------
+      // Tema para Botones Flotantes (FAB)
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: accentYellow,
-        foregroundColor: Colors.black,
+        backgroundColor: lightGreyAccent, // Gris
+        foregroundColor: Colors.white, // Blanco
       ),
+
+      // Tema para Botones Elevados
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: accentYellow,
-          foregroundColor: Colors.black,
+          backgroundColor: lightGreyAccent, // Gris
+          foregroundColor: Colors.white, // Blanco
         ),
       ),
+
+      // Tema para el Switch (como en la pág. de perfil)
       switchTheme: SwitchThemeData(
         thumbColor: MaterialStateProperty.resolveWith((states) {
           if (states.contains(MaterialState.selected)) {
-            return accentYellow;
+            return Colors.white; // Encendido
           }
-          return Colors.grey[400];
+          return Colors.grey[400]; // Apagado
         }),
         trackColor: MaterialStateProperty.resolveWith((states) {
           if (states.contains(MaterialState.selected)) {
-            return accentYellow.withOpacity(0.5);
+            return Colors.white.withOpacity(0.5); // Barra (encendido)
           }
-          return Colors.grey[700];
+          return Colors.grey[700]; // Barra (apagado)
         }),
       ),
+
+      // Tema general de íconos
       iconTheme: const IconThemeData(color: Colors.white),
     );
     // --- FIN DEL TEMA PERSONALIZADO ---
@@ -109,6 +128,7 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           title: 'EDI 301',
 
+          // Tema de día (Light) - Este sí usa los colores de la marca
           theme: ThemeData(
             brightness: Brightness.light,
             colorScheme: ColorScheme.light(
@@ -119,7 +139,8 @@ class MyApp extends StatelessWidget {
             useMaterial3: false,
           ),
 
-          darkTheme: customDarkTheme,
+          darkTheme: customDarkTheme, // <-- APLICA EL NUEVO TEMA GRIS
+
           themeMode: currentMode,
 
           initialRoute: 'login',
