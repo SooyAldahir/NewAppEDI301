@@ -103,7 +103,7 @@ class _Header extends StatelessWidget {
   String? _buildUrl(String? path) {
     if (path == null || path.isEmpty) return null;
     if (path.startsWith('http')) return path;
-    return '${ApiHttp._baseUrl}$path';
+    return '${ApiHttp.baseUrl}$path';
   }
 
   @override

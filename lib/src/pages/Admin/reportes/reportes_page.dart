@@ -12,7 +12,7 @@ class ReportesPage extends StatefulWidget {
 }
 
 class _ReportesPageState extends State<ReportesPage> {
-  final GetFamilyController _searchController = GetFamilyController();
+  final FamilyController _searchController = FamilyController();
   final ReporteFamiliasService _reportService = ReporteFamiliasService();
 
   // Estado de carga para el reporte general

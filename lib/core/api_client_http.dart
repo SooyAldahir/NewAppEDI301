@@ -13,6 +13,24 @@ class ApiHttp extends http.BaseClient {
   // Ajusta tu base URL:
   static const String _baseUrl = 'http://10.219.84.3:3000';
 
+  // --- 1. AÑADIDO: Expone la URL base para las imágenes ---
+  static const String baseUrl = _baseUrl;
+
+  // --- 2. AÑADIDO: Método estático para construir URI ---
+  static Uri getUri(String url) {
+    // Permite pasar path como '/api/...' o URLs absolutas
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Uri.parse(url);
+    }
+    // normaliza: evita doble slash
+    final base = _baseUrl.endsWith('/')
+        ? _baseUrl.substring(0, _baseUrl.length - 1)
+        : _baseUrl;
+    final path = url.startsWith('/') ? url : '/$url';
+    return Uri.parse('$base$path');
+  }
+  // --- FIN DE CAMBIOS ---
+
   final http.Client _inner = http.Client();
 
   /// Tiempo máximo de espera por request
@@ -98,20 +116,14 @@ class ApiHttp extends http.BaseClient {
   /// Subida multipart (equivalente a Dio+FormData)
   Future<http.StreamedResponse> multipart(
     String url, {
+    String method = 'POST', // <--- Esto ya estaba en tu código, está bien
     Map<String, String>? fields,
     List<http.MultipartFile>? files,
   }) {
     final uri = _resolve(url);
-    final req = http.MultipartRequest('POST', uri);
+    final req = http.MultipartRequest(method, uri);
     if (fields != null) req.fields.addAll(fields);
     if (files != null) req.files.addAll(files);
-    return send(req);
-  }
-
-  Future<http.Response> patchJson(String url, {Object? data}) {
-    final uri = _resolve(url);
-    final req = http.Request('PATCH', uri);
-    if (data != null) req.body = jsonEncode(data);
-    return send(req).then(http.Response.fromStream).timeout(_timeout);
+    return send(req); // 'send' ya añade el token de auth automáticamente
   }
 }
